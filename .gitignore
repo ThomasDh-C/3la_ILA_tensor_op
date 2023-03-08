@@ -44,6 +44,7 @@ vta/__pycache__/*
 
 # test dump files
 *.json
+!nvdla/*.json
 *.log
 *.txt
 *.csv
