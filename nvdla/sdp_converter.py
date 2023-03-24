@@ -48,8 +48,8 @@ class SDPConverter:
         dp_instrs_not_supported = {'LUT_Write', 'LUT_Read'}
         nb_vals_in_layer_seen = 0  # used for per channel
         alu_op_num, mul_op_num = 0, 0
-        alu_op_nums, mul_op_nums = [0 for i in range(32)], [
-            0 for i in range(32)]
+        alu_op_nums, mul_op_nums = [0 for i in range(16)], [
+            0 for i in range(16)]
         self.prog_frag = []
         for asm_line in self.asm_list:
             if asm_line['name'] in self.sdp_param_shifts_for_csb:
@@ -119,8 +119,8 @@ class SDPConverter:
                 if asm_line['name'] == 'SDP_D_DATA_CUBE_CHANNEL':
                     self.inp1_shape[2] = asm_line['NVDLA_SDP_D_DATA_CUBE_CHANNEL']
             elif asm_line['name'] == 'VirMemWr':
-                # max size of main input is 1000 2 byte atoms
-                if int(asm_line['addr'], 16) < 1000 * 2:
+                # max size of main input is 32000 2 byte atoms
+                if int(asm_line['addr'], 16) < 32000 * 2:
                     # take off 0x and append all together so end ---> start, each entry is 4 hex dig as int16
                     self.inp1_data = asm_line['data'][2:] + self.inp1_data
                 # operand
@@ -129,9 +129,9 @@ class SDPConverter:
             elif asm_line['name'] == 'VirMemRd':
                 continue
             elif asm_line['name'] in dp_instrs:
-                # every w*h * 2(32 int per atom, 16 per dp call)
+                # every w*h (16 int per atom, 16 per dp call)
                 collect_dma_ops_flag = len(self.dp_indices) % (
-                    self.inp1_shape[0] * self.inp1_shape[1] * 2) == 0
+                    self.inp1_shape[0] * self.inp1_shape[1]) == 0
 
                 self.dp_indices.append(len(self.prog_frag))
 
@@ -167,14 +167,15 @@ class SDPConverter:
                             if self.op_name[:7] == 'channel':
                                 if collect_dma_ops_flag and self.op_name != 'channel_batch_norm':
                                     collect_dma_ops_flag = False
-                                    for op_idx_temp in range(32):
+                                    for op_idx_temp in range(16):
                                         num_str = self.inp2_data[-4:]
+                                        print("num_str", num_str)
                                         alu_op_nums[op_idx_temp] = int(np.frombuffer(bytes.fromhex(
                                             num_str), dtype=np.int16, count=1)[0])
                                         self.inp2_data = self.inp2_data[:-4]
                                 elif collect_dma_ops_flag and self.op_name == 'channel_batch_norm':
                                     collect_dma_ops_flag = False
-                                    for op_idx_temp in range(32):
+                                    for op_idx_temp in range(16):
                                         # alu first
                                         num_str = self.inp2_data[-4:]
                                         alu_op_nums[op_idx_temp] = int(np.frombuffer(bytes.fromhex(
@@ -185,8 +186,9 @@ class SDPConverter:
                                         mul_op_nums[op_idx_temp] = int(np.frombuffer(bytes.fromhex(
                                             num_str), dtype=np.int16, count=1)[0])
                                         self.inp2_data = self.inp2_data[:-4]
-                                alu_op_nums_idx = channel_idx + 16 * \
-                                    ((len(self.dp_indices)-1) % 2)
+                                alu_op_nums_idx = channel_idx 
+                                # + 8 * ((len(self.dp_indices)-1) % 2)
+                                print(f'{channel}_{channel_idx}', alu_op_nums[alu_op_nums_idx], alu_op_nums_idx)
                                 instr[f'{channel}_{channel_idx}'] = alu_op_nums[alu_op_nums_idx]
 
                         elif channel == 'dma_data_mult' and (self.elemwise_op or self.op_name[:7] == 'channel'):
@@ -201,13 +203,13 @@ class SDPConverter:
                             if self.op_name[:7] == 'channel':
                                 if collect_dma_ops_flag and self.op_name != 'channel_batch_norm':
                                     collect_dma_ops_flag = False
-                                    for op_idx_temp in range(32):
+                                    for op_idx_temp in range(16):
                                         num_str = self.inp2_data[-4:]
                                         mul_op_nums[op_idx_temp] = int(np.frombuffer(bytes.fromhex(
                                             num_str), dtype=np.int16, count=1)[0])
                                         self.inp2_data = self.inp2_data[:-4]
-                                mul_op_nums_idx = channel_idx + 16 * \
-                                    ((len(self.dp_indices)-1) % 2)
+                                mul_op_nums_idx = channel_idx 
+                                # + 8 * ((len(self.dp_indices)-1) % 2)
                                 instr[f'{channel}_{channel_idx}'] = mul_op_nums[mul_op_nums_idx]
 
                         # override operand value if has been set in a register

@@ -44,7 +44,7 @@ class conv_driver:
         self.produce_write_asm_data_cube(
             self.inp_matrix.shape, self.inp_matrix, 0)
         self.produce_write_asm_data_cube(
-            self.kernels_matrix.shape, self.kernels_matrix, 1000 * 2)
+            self.kernels_matrix.shape, self.kernels_matrix, 32000 * 2)
 
     def produce_write_asm_data_cube(self, cube_shape, cube_list, addr_offset):
         """
@@ -107,7 +107,6 @@ class conv_driver:
             'NVDLA_CMAC_A_CONV_MODE': 0,
             'NVDLA_CMAC_A_PROC_PRECISION': 1
         })
-        
 
         self.ila_asm.append({
             'name': 'CMAC_A_D_OP_ENABLE',
@@ -148,7 +147,7 @@ class conv_driver:
         n, h, w, c = self.inp_matrix.shape
         kern_n, kern_h, kern_w, kern_c = self.kernels_matrix.shape
         stride_w, strid_h = self.strides
-        dilation_w, dilation_h = self.dilation 
+        dilation_w, dilation_h = self.dilation
         cmac_calls = 0  # min
         numbers_per_block = 64
         # if doing stride would throw in here in range the step size and do more math range(n_h, h-kern_h+2)
@@ -291,8 +290,8 @@ class conv_driver:
             #               for l in sim_output]  # turn to ints
             temp = []
             for l_idx, line in enumerate(fin.readlines()):
-                if line[:9]=='instr No.':
-                    if l_idx!=0:
+                if line[:9] == 'instr No.':
+                    if l_idx != 0:
                         sim_output.append(temp)
                     temp = []
                 elif line[:3] == 'mac':
@@ -300,7 +299,6 @@ class conv_driver:
                     temp.append(int(split_line[1]))
             if len(temp) > 0:
                 sim_output.append(temp)
-                
 
         # iterate through output ... nb don't know output shape so have to assemble in known format then convert to correct
         n, k, h, w = self.orig_out_shape

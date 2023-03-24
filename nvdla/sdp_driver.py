@@ -34,7 +34,7 @@ class relu_driver:
         if self.op_name[:5] != 'layer':
             # TODO: might need to rejig input for bias add
             self.produce_write_asm_data_cube(
-                self.inp2_shape, self.input2, None, 1000 * 2)
+                self.inp2_shape, self.input2, None, 32000 * 2)
 
     def produce_write_asm_data_cube(self, cube_shape, cube_list, cube_list2, addr_offset):
         """
@@ -43,23 +43,25 @@ class relu_driver:
         # dbbif configurable to width of 32, 64, 128, 256 or 512-bits
         # ie nb of ints is               2,   4,   8,  16 or  32
         dbbif_width = 512
-        ints_per_line = int(dbbif_width / 16)
+        ints_per_atom = 16
+        # ints_per_line = int(dbbif_width / 16)
+        # 4 bits in byte, 2 bytes in int16
+        ints_per_line = int(dbbif_width / (4*2))
         h, w, c = cube_shape
 
         all_data_str = []
         full_data_str = ''
-        for n_c_large in range(0, math.ceil(c/ 32)):
+        for n_c_large in range(0, math.ceil(c / ints_per_atom)):
             for n_h in range(h):
                 for n_w in range(w):
-                    # 32 channels per atom
-                    # print(n_h, n_w)
-                    for n_c_small in range(32):
+                    # 16 channels per atom --> 32 bytes
+                    for n_c_small in range(ints_per_atom):
                         # keep track of ints written
                         if addr_offset == 0:
                             self.inp1_mem_length += 1
 
                         # add on int or pad with 0s
-                        ch_idx = n_c_large*32 + n_c_small
+                        ch_idx = n_c_large*ints_per_atom + n_c_small
                         if ch_idx < c:
                             num_str = cube_list[n_h][n_w][ch_idx].tobytes(
                             ).hex()
@@ -72,10 +74,15 @@ class relu_driver:
                         else:
                             full_data_str = '0000' + full_data_str
 
-                        # purge line if full
+                        # purge line if full - note each int takes up 4 chars as 2 bytes
                         if len(full_data_str) == ints_per_line * 4:
                             all_data_str.append(full_data_str)
                             full_data_str = ''
+
+        if len(full_data_str) > 0:
+            full_data_str = '0'*(ints_per_line * 4 -
+                                 len(full_data_str)) + full_data_str
+            all_data_str.append(full_data_str)
 
         for data_str_idx, full_data_str in enumerate(all_data_str):
             self.ila_asm.append({
@@ -573,7 +580,7 @@ class relu_driver:
         produce asm for reading data from the RDMA memory of the NVDLA
         """
         dbbif_width = 64  # dbbif configurable to width of 32, 64, 128, 256 or 512-bits
-        atoms_per_line = int(dbbif_width / 16)
+        atoms_per_line = int(dbbif_width / 32)
         for i in range(int(np.ceil(np.prod(self.inp1_shape) / atoms_per_line))):
             self.ila_asm.append({
                 'name': 'VirMemRd',
@@ -653,13 +660,14 @@ class relu_driver:
         # datapath emits int16 so save as int too
         h, w, c = self.inp1_shape
         result_np = np.zeros((1, h, w, c), 'int16')
+        ints_per_atom = 16
         idx = 0
-        for n_c_large in range(0, math.ceil(c/ 32)):
+        for n_c_large in range(0, math.ceil(c / ints_per_atom)):
             for n_h in range(h):
                 for n_w in range(w):
-                    # 32 channels per atom
-                    for n_c_small in range(32):
-                        ch_idx = n_c_large*32 + n_c_small
+                    # 16 channels per atom
+                    for n_c_small in range(ints_per_atom):
+                        ch_idx = n_c_large*ints_per_atom + n_c_small
                         if ch_idx < c:
                             result_np[0][n_h][n_w][ch_idx] = result_unshaped[idx]
                         idx += 1

@@ -44,7 +44,7 @@ class conv_driver:
         self.produce_write_asm_data_cube(
             self.inp_matrix.shape, self.inp_matrix, 0)
         self.produce_write_asm_data_cube(
-            self.kernels_matrix.shape, self.kernels_matrix, 1000 * 2)
+            self.kernels_matrix.shape, self.kernels_matrix, 32000 * 2)
 
     def produce_write_asm_data_cube(self, cube_shape, cube_list, addr_offset):
         """
@@ -53,36 +53,41 @@ class conv_driver:
         # dbbif configurable to width of 32, 64, 128, 256 or 512-bits
         # ie nb of ints is               2,   4,   8,  16 or  32
         dbbif_width = 512
-        ints_per_line = int(dbbif_width / 16)
-        n, h, w, c = cube_shape
+        ints_per_atom = 16
+        # ints_per_line = int(dbbif_width / 16)
+        # 4 bits in byte, 2 bytes in int16
+        ints_per_line = int(dbbif_width / (4*2))
+        h, w, c = cube_shape
 
         all_data_str = []
         full_data_str = ''
-        numbers_per_block = 64
-        for n_n in range(n):
-            for n_c_large in range(0, math.ceil(c / numbers_per_block)):
-                for n_h in range(h):
-                    for n_w in range(w):
-                        # 64 channels per atom for conv
-                        # print(n_h, n_w)
-                        for n_c_small in range(numbers_per_block):
-                            # keep track of ints written
-                            if addr_offset == 0:
-                                self.inp1_mem_length += 1
+        for n_c_large in range(0, math.ceil(c / ints_per_atom)):
+            for n_h in range(h):
+                for n_w in range(w):
+                    # 16 channels per atom --> 32 bytes
+                    for n_c_small in range(ints_per_atom):
+                        # keep track of ints written
+                        if addr_offset == 0:
+                            self.inp1_mem_length += 1
 
-                            # add on int or pad with 0s
-                            ch_idx = n_c_large*numbers_per_block + n_c_small
-                            if ch_idx < c:
-                                num_str = cube_list[n_n][n_h][n_w][ch_idx].tobytes(
-                                ).hex()
-                                full_data_str = num_str + full_data_str
-                            else:
-                                full_data_str = '0000' + full_data_str
+                        # add on int or pad with 0s
+                        ch_idx = n_c_large*ints_per_atom + n_c_small
+                        if ch_idx < c:
+                            num_str = cube_list[n_h][n_w][ch_idx].tobytes(
+                            ).hex()
+                            full_data_str = num_str + full_data_str
+                        else:
+                            full_data_str = '0000' + full_data_str
 
-                            # purge line if full
-                            if len(full_data_str) == ints_per_line * 4:
-                                all_data_str.append(full_data_str)
-                                full_data_str = ''
+                        # purge line if full - note each int takes up 4 chars as 2 bytes
+                        if len(full_data_str) == ints_per_line * 4:
+                            all_data_str.append(full_data_str)
+                            full_data_str = ''
+
+        if len(full_data_str) > 0:
+            full_data_str = '0'*(ints_per_line * 4 -
+                                 len(full_data_str)) + full_data_str
+            all_data_str.append(full_data_str)
 
         for data_str_idx, full_data_str in enumerate(all_data_str):
             self.ila_asm.append({
