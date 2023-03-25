@@ -669,7 +669,11 @@ class relu_driver:
                     for n_c_small in range(ints_per_atom):
                         ch_idx = n_c_large*ints_per_atom + n_c_small
                         if ch_idx < c:
+                            if self.op_name == 'elemwise_equal':
+                                result_unshaped[idx] = (
+                                    1, 0)[result_unshaped[idx] >= 1]
                             result_np[0][n_h][n_w][ch_idx] = result_unshaped[idx]
+
                         idx += 1
 
         result_np.tofile(f'./data/{self.op_name}/result.txt', sep='\n')
