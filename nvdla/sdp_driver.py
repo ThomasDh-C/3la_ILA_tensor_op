@@ -21,6 +21,7 @@ class relu_driver:
             self.inp2_shape = []
         self.input1 = []
         self.input2 = []
+        self.input3 = []
         self.ila_asm = []
         self.op_name = op_name
         self.inp1_mem_length = 0  # measured in ints
@@ -33,8 +34,12 @@ class relu_driver:
 
         if self.op_name[:5] != 'layer':
             # TODO: might need to rejig input for bias add
-            self.produce_write_asm_data_cube(
-                self.inp2_shape, self.input2, None, 32000 * 2)
+            if self.op_name == 'channel_batch_norm':
+                self.produce_write_asm_data_cube(
+                    self.inp2_shape, self.input2, self.input3, 32000 * 2)
+            else:
+                self.produce_write_asm_data_cube(
+                    self.inp2_shape, self.input2, None, 32000 * 2)
 
     def produce_write_asm_data_cube(self, cube_shape, cube_list, cube_list2, addr_offset):
         """
@@ -67,7 +72,7 @@ class relu_driver:
                             ).hex()
                             full_data_str = num_str + full_data_str
                             # only ever used for 1/sqrt(variance + eps) in case of batch_norm
-                            if cube_list2 != None:
+                            if cube_list2 is not None:
                                 num_str = cube_list2[n_h][n_w][ch_idx].tobytes(
                                 ).hex()
                                 full_data_str = num_str + full_data_str
@@ -124,7 +129,7 @@ class relu_driver:
             self.produce_elemwise_max_min_add_equal_asm(op='add')
         if self.op_name == 'elemwise_equal':
             self.produce_elemwise_max_min_add_equal_asm(op='equal')
-        if self.op_name == 'elemwise_mul':
+        if self.op_name == 'elemwise_mul' or self.op_name == 'channel_mul':
             self.produce_mul_prelu_asm(op='mul')
         if self.op_name == 'channel_prelu':
             self.produce_mul_prelu_asm(op='prelu')
@@ -606,6 +611,7 @@ class relu_driver:
         print('\n--------------------------------------------------------------')
         print('\tcollecting input data')
         print('--------------------------------------------------------------\n')
+        # don't forget to reshape input 1 NCHW to NHWC if needed by axis=1 on batch norm
         with open(f'./data/{self.op_name}/inp.json', 'r') as fin:
             self.input1 = np.array(json.load(fin)).astype(
                 'int16').reshape(self.inp1_shape)
@@ -613,6 +619,10 @@ class relu_driver:
         if len(self.inp2_shape) > 0:
             with open(f'./data/{self.op_name}/inp2.json', 'r') as fin:
                 self.input2 = np.array(json.load(fin)).astype(
+                    'int16').reshape(self.inp2_shape)
+        if self.op_name == 'channel_batch_norm':
+            with open(f'./data/{self.op_name}/inp3.json', 'r') as fin:
+                self.input3 = np.array(json.load(fin)).astype(
                     'int16').reshape(self.inp2_shape)
 
     def produce_prog_frag(self):

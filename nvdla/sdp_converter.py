@@ -169,7 +169,6 @@ class SDPConverter:
                                     collect_dma_ops_flag = False
                                     for op_idx_temp in range(16):
                                         num_str = self.inp2_data[-4:]
-                                        print("num_str", num_str)
                                         alu_op_nums[op_idx_temp] = int(np.frombuffer(bytes.fromhex(
                                             num_str), dtype=np.int16, count=1)[0])
                                         self.inp2_data = self.inp2_data[:-4]
@@ -186,9 +185,7 @@ class SDPConverter:
                                         mul_op_nums[op_idx_temp] = int(np.frombuffer(bytes.fromhex(
                                             num_str), dtype=np.int16, count=1)[0])
                                         self.inp2_data = self.inp2_data[:-4]
-                                alu_op_nums_idx = channel_idx 
-                                # + 8 * ((len(self.dp_indices)-1) % 2)
-                                print(f'{channel}_{channel_idx}', alu_op_nums[alu_op_nums_idx], alu_op_nums_idx)
+                                alu_op_nums_idx = channel_idx
                                 instr[f'{channel}_{channel_idx}'] = alu_op_nums[alu_op_nums_idx]
 
                         elif channel == 'dma_data_mult' and (self.elemwise_op or self.op_name[:7] == 'channel'):
@@ -208,7 +205,7 @@ class SDPConverter:
                                         mul_op_nums[op_idx_temp] = int(np.frombuffer(bytes.fromhex(
                                             num_str), dtype=np.int16, count=1)[0])
                                         self.inp2_data = self.inp2_data[:-4]
-                                mul_op_nums_idx = channel_idx 
+                                mul_op_nums_idx = channel_idx
                                 # + 8 * ((len(self.dp_indices)-1) % 2)
                                 instr[f'{channel}_{channel_idx}'] = mul_op_nums[mul_op_nums_idx]
 
