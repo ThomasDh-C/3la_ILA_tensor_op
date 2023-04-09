@@ -637,26 +637,35 @@ class relu_driver:
     def invoke_ila_simulator_and_collect_results(self):
         print('\n--------------------------------------------------------------')
         print(
-            f'\tinvoking NVDLA ILA simulator and collecting result')
+            f'\tinvoking NVDLA ILA simulator and collecting result {len(self.ila_cvtr.dp_indices)} times')
         print('--------------------------------------------------------------\n')
         start_time = timeit.default_timer()
         result_unshaped = []
         start_dp, end_dp = min(self.ila_cvtr.dp_indices), max(
             self.ila_cvtr.dp_indices)
-        # config_instrs = self.ila_cvtr.prog_frag[:start_dp]
-        # finish_instrs = self.ila_cvtr.prog_frag[-(
-        #     len(self.ila_cvtr.prog_frag)-1-end_dp):]
-        # with open('temp_sdp_input.json', 'w') as fout:
-        #     json.dump({'program fragment': self.ila_cvtr.prog_frag}, fout, indent=4)
-        cmd = [
-            "sdp_sim_driver_fast",
-            f'./test/{self.op_name}/ila_prog_frag',
-        ]
-        subprocess.run(cmd)
-        with open(f'./test/{self.op_name}/ila_prog_frag_out.json', 'r') as fin:
-            ila_out = json.load(fin)
-            for instr_idx in self.ila_cvtr.dp_indices:
-                result_unshaped.extend(ila_out[instr_idx])
+        config_instrs = self.ila_cvtr.prog_frag[:start_dp]
+        finish_instrs = self.ila_cvtr.prog_frag[-(
+            len(self.ila_cvtr.prog_frag)-1-end_dp):]
+        for instr_idx in self.ila_cvtr.dp_indices:
+            # can only run 1 dp instruction per sim run so make n(dp instuctions) prog frags
+            temp_prog_frag = config_instrs + \
+                self.ila_cvtr.prog_frag[start_dp:instr_idx+1] + finish_instrs
+            # reset numbering if select subset of instructions
+            for i in range(len(temp_prog_frag)):
+                temp_prog_frag[i]["instr No."] = i
+            with open('temp_sdp_input.json', 'w') as fout:
+                json.dump({'program fragment': temp_prog_frag}, fout, indent=4)
+            cmd = [
+                "sdp_sim_driver_g",
+                "temp_sdp",
+            ]
+            subprocess.run(cmd)
+
+            # collect result
+            with open(f'temp_sdp_out.json', 'r') as fin:
+                ila_out = json.load(fin)
+                for out_idx in range(16):
+                    result_unshaped.append(ila_out[out_idx])
 
         # datapath emits int16 so save as int too
         h, w, c = self.inp1_shape
@@ -674,6 +683,7 @@ class relu_driver:
                                 result_unshaped[idx] = (
                                     1, 0)[result_unshaped[idx] >= 1]
                             result_np[0][n_h][n_w][ch_idx] = result_unshaped[idx]
+
                         idx += 1
 
         result_np.tofile(f'./data/{self.op_name}/result.txt', sep='\n')
@@ -684,6 +694,8 @@ class relu_driver:
             end_time - start_time))
 
     def clean_root_dir(self, deep_clean):
+        for file_name in ['temp_sdp_input.json', 'temp_sdp_out.json']:
+            os.remove(file_name)
         if deep_clean:
             for file_name in ['instr_log.txt', 'instr_update_log.txt']:
                 os.remove(file_name)
@@ -702,7 +714,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Add Parameters')
     parser.add_argument('--inp_shape', nargs='+', type=int)
     parser.add_argument('--inp2_shape', nargs='+', type=int, required=False)
-    parser.add_argument('--axis', nargs='+', type=int, required=False)
     parser.add_argument("--op_name", default="relu")
     args = parser.parse_args()
 

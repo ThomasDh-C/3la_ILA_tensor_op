@@ -274,10 +274,11 @@ class conv_driver:
         print('--------------------------------------------------------------\n')
         start_time = timeit.default_timer()
         cmd = [
-            "cmac_sim_driver_v2",
+            "cmac_sim_driver_v2_fast",
             f'./test/{self.op_name}/ila_prog_frag_input.json',
             f'./test/{self.op_name}/ila_prog_frag_out.json'
         ]
+        print('Running command', " ".join(cmd))
         subprocess.run(cmd)
 
         sim_output = []
