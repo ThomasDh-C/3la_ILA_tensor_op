@@ -13,7 +13,7 @@ from sdp_converter import SDPConverter
 
 
 class relu_driver:
-    def __init__(self, inp_shape, inp2_shape=[],
+    def __init__(self, inp_shape, inp2_shape=[], axis=None,
                  op_name="relu"):
         self.inp1_shape = inp_shape
         self.inp2_shape = inp2_shape
@@ -23,6 +23,7 @@ class relu_driver:
         self.input2 = []
         self.input3 = []
         self.ila_asm = []
+        self.axis = axis
         self.op_name = op_name
         self.inp1_mem_length = 0  # measured in ints
 
@@ -615,6 +616,14 @@ class relu_driver:
         with open(f'./data/{self.op_name}/inp.json', 'r') as fin:
             self.input1 = np.array(json.load(fin)).astype(
                 'int16').reshape(self.inp1_shape)
+            if self.axis != None:
+                # axis is 0,1,2   ... if 0 then chw to hwc (1,2,0)
+                #                     if 1 then hcw to hwc (0,2,1)
+                #                     if 2 then hwc to hwc (0,1,2)
+                reshaper = [i for i in range(3) if i != self.axis]
+                reshaper.append(self.axis)
+                self.input1 = np.transpose(self.input1, reshaper)
+                self.inp1_shape = self.input1.shape
 
         if len(self.inp2_shape) > 0:
             with open(f'./data/{self.op_name}/inp2.json', 'r') as fin:
@@ -675,7 +684,13 @@ class relu_driver:
                                     1, 0)[result_unshaped[idx] >= 1]
                             result_np[0][n_h][n_w][ch_idx] = result_unshaped[idx]
                         idx += 1
-
+        if self.axis != None:
+            # axis is 0,1,2   ... if 0 then nhwc to nchw (0,3,1,2)
+            #                     if 1 then nhwc to nhcw (0,1,3,2)
+            #                     if 2 then nhwc to nhwc (0,1,2,3)
+            reshaper = [i for i in range(3)]
+            reshaper = reshaper[:self.axis+1] + [3] + reshaper[self.axis+1:]
+            result_np = np.transpose(result_np, reshaper)
         result_np.tofile(f'./data/{self.op_name}/result.txt', sep='\n')
 
         end_time = timeit.default_timer()
@@ -702,10 +717,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Add Parameters')
     parser.add_argument('--inp_shape', nargs='+', type=int)
     parser.add_argument('--inp2_shape', nargs='+', type=int, required=False)
-    parser.add_argument('--axis', nargs='+', type=int, required=False)
+    parser.add_argument('--axis', type=int, required=False)
     parser.add_argument("--op_name", default="relu")
     args = parser.parse_args()
 
     driver = relu_driver(inp_shape=args.inp_shape,
-                         inp2_shape=args.inp2_shape, op_name=args.op_name)
+                         inp2_shape=args.inp2_shape, op_name=args.op_name, axis=args.axis)
     driver.run()
