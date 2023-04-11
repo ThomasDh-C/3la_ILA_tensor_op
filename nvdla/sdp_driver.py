@@ -37,10 +37,10 @@ class relu_driver:
             # TODO: might need to rejig input for bias add
             if self.op_name == 'channel_batch_norm':
                 self.produce_write_asm_data_cube(
-                    self.inp2_shape, self.input2, self.input3, 32000 * 2)
+                    self.inp2_shape, self.input2, self.input3, 128000 * 2)
             else:
                 self.produce_write_asm_data_cube(
-                    self.inp2_shape, self.input2, None, 32000 * 2)
+                    self.inp2_shape, self.input2, None, 128000 * 2)
 
     def produce_write_asm_data_cube(self, cube_shape, cube_list, cube_list2, addr_offset):
         """
@@ -397,6 +397,7 @@ class relu_driver:
         produce asm fragment specifics needed for elemwise mul of two matrices
         or prelu per channel (both cases use dma and converter handles elemwise vs per channel)
         """
+        # should be 0 for mul, 1 for prelu
         mul_op_convert = {
             'mul': 0,
             'prelu': 1
@@ -692,6 +693,7 @@ class relu_driver:
             reshaper = reshaper[:self.axis+1] + [3] + reshaper[self.axis+1:]
             result_np = np.transpose(result_np, reshaper)
         result_np.tofile(f'./data/{self.op_name}/result.txt', sep='\n')
+        print(f'result of {self.op_name} is:\n', result_np)
 
         end_time = timeit.default_timer()
         print('\n********* ILA simulator performance ***********')

@@ -119,8 +119,8 @@ class SDPConverter:
                 if asm_line['name'] == 'SDP_D_DATA_CUBE_CHANNEL':
                     self.inp1_shape[2] = asm_line['NVDLA_SDP_D_DATA_CUBE_CHANNEL']
             elif asm_line['name'] == 'VirMemWr':
-                # max size of main input is 32000 2 byte atoms
-                if int(asm_line['addr'], 16) < 32000 * 2:
+                # max size of main input is 128000 2 byte atoms
+                if int(asm_line['addr'], 16) < 128000 * 2:
                     # take off 0x and append all together so end ---> start, each entry is 4 hex dig as int16
                     self.inp1_data = asm_line['data'][2:] + self.inp1_data
                 # operand
@@ -169,8 +169,12 @@ class SDPConverter:
                                     collect_dma_ops_flag = False
                                     for op_idx_temp in range(16):
                                         num_str = self.inp2_data[-4:]
-                                        alu_op_nums[op_idx_temp] = int(np.frombuffer(bytes.fromhex(
-                                            num_str), dtype=np.int16, count=1)[0])
+                                        if self.op_name == 'channel_mul' or self.op_name == 'channel_prelu':
+                                            mul_op_nums[op_idx_temp] = int(np.frombuffer(bytes.fromhex(
+                                                num_str), dtype=np.int16, count=1)[0])
+                                        else:
+                                            alu_op_nums[op_idx_temp] = int(np.frombuffer(bytes.fromhex(
+                                                num_str), dtype=np.int16, count=1)[0])
                                         self.inp2_data = self.inp2_data[:-4]
                                 elif collect_dma_ops_flag and self.op_name == 'channel_batch_norm':
                                     collect_dma_ops_flag = False

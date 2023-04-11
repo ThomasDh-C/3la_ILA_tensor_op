@@ -44,7 +44,7 @@ class conv_driver:
         self.produce_write_asm_data_cube(
             self.inp_matrix.shape, self.inp_matrix, 0)
         self.produce_write_asm_data_cube(
-            self.kernels_matrix.shape, self.kernels_matrix, 32000 * 2)
+            self.kernels_matrix.shape, self.kernels_matrix, 128000 * 2)
 
     def produce_write_asm_data_cube(self, cube_shape, cube_list, addr_offset):
         """
@@ -250,14 +250,14 @@ class conv_driver:
             temp_matrix[0, pad_h:h+pad_h,
                         pad_w:w+pad_w, :] = self.inp_matrix
             self.inp_matrix = temp_matrix
-        print(self.inp_matrix)
+        # print(self.inp_matrix)
 
         with open(f'./data/{self.op_name}/kernels.json', 'r') as fin:
             self.kernels_matrix = np.array(json.load(fin)).astype(
                 'int16').reshape(self.orig_kernels_shape)
             self.kernels_matrix = self.transform_matrix(
                 self.kernels_weight_format, self.desired_kern_format, self.kernels_matrix)
-        print(self.kernels_matrix)
+        # print(self.kernels_matrix)
 
     def produce_prog_frag(self):
         print('\n--------------------------------------------------------------')
@@ -329,7 +329,7 @@ class conv_driver:
                                 nkhw_out[0][k_idx][n_h][n_w] += line_vals[n_k]
 
         nkhw_out.tofile(f'./data/{self.op_name}/result.txt', sep='\n')
-
+        print(f'result of {self.op_name} is:', nkhw_out)
         end_time = timeit.default_timer()
         print('\n********* ILA simulator performance ***********')
         print('ILA simulator execution time is {:04f}s'.format(
