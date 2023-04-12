@@ -170,8 +170,8 @@ class conv_driver:
         numbers_per_block = 64
         # if doing stride would throw in here in range the step size and do more math range(n_h, h-kern_h+2)
         _, _, out_h, out_w = self.orig_out_shape
-        for n_h_inp in range(n_h*dilation_h, out_h+n_h*dilation_h):
-            for n_w_inp in range(n_w*dilation_w, out_w+n_w*dilation_w):
+        for n_h_inp in range(n_h*dilation_h, stride_h*out_h+n_h*dilation_h, stride_h):
+            for n_w_inp in range(n_w*dilation_w, stride_w*out_w+n_w*dilation_w, stride_w):
                 # same kernel weights for all kernels in this stripe - 1 feature atom and 16 kernel atoms supported per os
                 # 64 channelscmac_conv_direct
                 cmac_op = {'name': 'CMAC_CONV_DIRECT'}
@@ -185,11 +185,14 @@ class conv_driver:
                     if ch_idx < c:
                         cmac_op[f'cmac_csc2cmac_ft_{n_c_small_inp}'] = int(
                             self.inp_matrix[0][n_h_inp][n_w_inp][ch_idx])
+
                 # n_n_large = which set of 16 kernels working on
                 # n_h_inp-n_h, n_w_inp-n_w are h, w position respectively in out matrix
                 # don't include n_c_large as in the end will combine all n_c_large together
                 # so don't need to distinguish them
-                cmac_op['out_pos'] = f'{n_n_large}_{n_h_inp-n_h*dilation_h}_{n_w_inp-n_w*dilation_w}'
+                out_pos_h = int((n_h_inp-n_h*dilation_h)/stride_h)
+                out_pos_w = int((n_w_inp-n_w*dilation_w)/stride_w)
+                cmac_op['out_pos'] = f'{n_n_large}_{out_pos_h}_{out_pos_w}'
                 self.ila_asm.append(cmac_op)
 
         # pad stripe with empty unused computations if necessary for CACC
