@@ -12,36 +12,23 @@ import timeit
 from conv_converter import ConvConverter
 
 
-class bcolors:
-    # https://stackoverflow.com/questions/287871/how-do-i-print-colored-text-to-the-terminal
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKCYAN = '\033[96m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
-
-
-def red(inp_string):
-    return f'{bcolors.FAIL}{inp_string}{bcolors.ENDC}'
-
-
 class conv_driver:
     def __init__(self, inp_shape, out_shape, kernels_shape, inp_weight_format,
-                 kernels_weight_format, dilation, padding, strides):
+                 kernels_weight_format, dilation, padding, strides, out_format=None):
         # 4d array - 1 at start because only batch number 1 supported
         self.orig_inp_shape = [1] + inp_shape
         self.orig_out_shape = out_shape
-        self.orig_kernels_shape = kernels_shape  # 4d array
-        self.inp_weight_format = inp_weight_format  # string
+        self.orig_kernels_shape = kernels_shape             # 4d array
+        self.inp_weight_format = inp_weight_format          # string
         self.kernels_weight_format = kernels_weight_format  # string
+        self.out_format = out_format                        # string
+        if self.out_format is None:
+            self.out_format = self.inp_weight_format
         # always convert to same internal format N = 1, then height, then width, then channels
         self.desired_inp_format = 'NHWC'
         # always convert to same internal format - same as for inp
         self.desired_kern_format = 'OHWI'
+        self.desired_out_internal_format = 'NCHW'
         self.dilation = dilation  # 2d array
         self.padding = padding  # 2d array
         self.strides = strides  # 2d array
@@ -168,7 +155,6 @@ class conv_driver:
         dilation_w, dilation_h = self.dilation
         cmac_calls = 0  # min
         numbers_per_block = 64
-        # if doing stride would throw in here in range the step size and do more math range(n_h, h-kern_h+2)
         _, _, out_h, out_w = self.orig_out_shape
         for n_h_inp in range(n_h*dilation_h, stride_h*out_h+n_h*dilation_h, stride_h):
             for n_w_inp in range(n_w*dilation_w, stride_w*out_w+n_w*dilation_w, stride_w):
@@ -187,7 +173,6 @@ class conv_driver:
                             self.inp_matrix[0][n_h_inp][n_w_inp][ch_idx])
 
                 # n_n_large = which set of 16 kernels working on
-                # n_h_inp-n_h, n_w_inp-n_w are h, w position respectively in out matrix
                 # don't include n_c_large as in the end will combine all n_c_large together
                 # so don't need to distinguish them
                 out_pos_h = int((n_h_inp-n_h*dilation_h)/stride_h)
@@ -230,6 +215,16 @@ class conv_driver:
         with open(f'./test/{self.op_name}/ila_asm.json', 'w') as fout:
             json.dump(self.ila_asm, fout, indent=2)
 
+    def transpose_new_order(self, inp_format, out_format):
+        new_order = []
+        for c in out_format:
+            if c in inp_format:
+                new_order.append(inp_format.index(c))
+            else:
+                raise Exception(
+                    f"Char {c} from {out_format} not found in {inp_format}. Cannot convert matrix to new form")
+        return new_order
+
     def transform_matrix(self, inp_format, out_format, inp_matrix):
         """Reorder NCWH to NWHC and other orders"""
         # based on
@@ -242,13 +237,7 @@ class conv_driver:
             raise Exception(
                 f"Out format is wrong length ({len(out_format)}) vs matrix shape length ({len(inp_matrix.shape)})")
 
-        new_order = []
-        for c in out_format:
-            if c in inp_format:
-                new_order.append(inp_format.index(c))
-            else:
-                raise Exception(
-                    f"Char {c} from {out_format} not found in {inp_format}. Cannot convert matrix to new form")
+        new_order = self.transpose_new_order(inp_format, out_format)
         return np.transpose(inp_matrix, new_order)
 
     def collect_data_in(self):
@@ -258,6 +247,7 @@ class conv_driver:
         print('\n--------------------------------------------------------------')
         print('\tcollecting input data')
         print('--------------------------------------------------------------\n')
+        # input data
         with open(f'./data/{self.op_name}/inp.json', 'r') as fin:
             self.inp_matrix = np.array(json.load(fin)).astype(
                 'int16').reshape(self.orig_inp_shape)
@@ -273,12 +263,19 @@ class conv_driver:
             self.inp_matrix = temp_matrix
         print('Max of input:', np.max(self.inp_matrix))
 
+        # kernels
         with open(f'./data/{self.op_name}/kernels.json', 'r') as fin:
             self.kernels_matrix = np.array(json.load(fin)).astype(
                 'int16').reshape(self.orig_kernels_shape)
             self.kernels_matrix = self.transform_matrix(
                 self.kernels_weight_format, self.desired_kern_format, self.kernels_matrix)
         print('Max of kernels:', np.max(self.kernels_matrix))
+
+        # output shape - ensure in expected order
+        output_shape_reordering = self.transpose_new_order(
+            self.out_format, self.desired_out_internal_format)
+        self.orig_out_shape = [self.orig_out_shape[idx]
+                               for idx in output_shape_reordering]
 
     def produce_prog_frag(self):
         print('\n--------------------------------------------------------------')
@@ -335,24 +332,16 @@ class conv_driver:
                     # get array of output indexes to sum
                     ids_to_sum = self.ila_cvtr.sim_to_out_cube[f'{n_k_large}_{n_h}_{n_w}']
                     for sim_output_idx in ids_to_sum:
-                        # retrieve vals for that line using json_idx
+                        # retrieve vals for that line using sim_output_idx
                         line_vals = sim_output[sim_output_idx]
                         for n_k in range(16):
-                            # add on int or pad with 0s
                             k_idx = n_k_large*16 + n_k
                             if k_idx < k:
-                                # new_out = line_vals[n_k] + \
-                                #     nkhw_out[0][k_idx][n_h][n_w]
-                                # if new_out > 32767:
-                                #     print(red(
-                                #         f'WARNING: value {new_out} at {k_idx}, {n_h}, {n_w} is greater than int16 max (32767) - overflow into neg'))
-                                #     # new_out = 32767
-                                # elif new_out < -32768:
-                                #     print(red(
-                                #         f'WARNING: value {new_out} at {k_idx}, {n_h}, {n_w} is less than int16 min (-32768) - overflow into neg'))
-                                #     # new_out = -32768
+                                # allow overflow of int 16 to negative as default relay behaviour
                                 nkhw_out[0][k_idx][n_h][n_w] += line_vals[n_k]
-
+        # reshape as desired
+        nkhw_out = self.transform_matrix(
+            self.desired_out_internal_format, self.out_format, nkhw_out)
         nkhw_out.tofile(f'./data/{self.op_name}/result.txt', sep='\n')
         print(f'result of {self.op_name} is:', nkhw_out)
         end_time = timeit.default_timer()
@@ -382,6 +371,7 @@ if __name__ == '__main__':
     parser.add_argument('--kernels_shape', nargs='+', type=int)
     parser.add_argument('--input_weight_format', type=str)
     parser.add_argument('--kernels_weight_format', type=str)
+    parser.add_argument('--out_format', type=str, required=False)
     parser.add_argument('--dilation', nargs='+', type=int)
     parser.add_argument('--padding', nargs='+', type=int)
     parser.add_argument('--strides', nargs='+', type=int)
@@ -394,6 +384,7 @@ if __name__ == '__main__':
                          kernels_weight_format=args.kernels_weight_format,
                          dilation=args.dilation,
                          padding=args.padding,
-                         strides=args.strides
+                         strides=args.strides,
+                         out_format=args.out_format
                          )
     driver.run()
