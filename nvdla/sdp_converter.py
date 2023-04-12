@@ -36,7 +36,7 @@ class SDPConverter:
         self.elemwise_op = self.op_name[:8] == 'elemwise'
 
         path = os.path.dirname(os.path.abspath(__file__))
-        with open(path + '/sdp_param_shifts_for_csb.json', 'r') as fin:
+        with open(path + '/all_param_shifts_for_csb.json', 'r') as fin:
             self.sdp_param_shifts_for_csb = json.load(fin)
 
     def to_ila_prog_frag(self):
@@ -53,13 +53,17 @@ class SDPConverter:
         self.prog_frag = []
         for asm_line in self.asm_list:
             if asm_line['name'] in self.sdp_param_shifts_for_csb:
+                if 'SDP' not in asm_line['name']:
+                    print('ERROR!!!!', asm_line['name'])
+                    continue
                 # append to prog frag based on that and find inp_addr_end
                 instr = {"instr No.": len(self.prog_frag)}
                 for channel in ['cacc_data', 'mrdma_data', 'regs_data_alu', 'regs_data_mult', 'dma_data_alu', 'dma_data_mult']:
                     for channel_idx in range(16):
                         instr[f'{channel}_{channel_idx}'] = 0
                 name_conversion_dict = self.sdp_param_shifts_for_csb[asm_line['name']]
-                instr['csb_addr'] = name_conversion_dict['addr']
+                # first part of address as simulator can't understand it
+                instr['csb_addr'] = '0x' + name_conversion_dict['addr'][3:]
                 # create csb data
                 data = ''
                 all_params = list(name_conversion_dict['shifts'].items())
@@ -88,36 +92,36 @@ class SDPConverter:
 
                 # unique instructions that set registers important to later datapath instructions
                 if asm_line['name'] == 'SDP_D_DP_BS_ALU_CFG':
-                    self.bs_alu_src = asm_line['NVDLA_SDP_D_BS_ALU_SRC']
+                    self.bs_alu_src = asm_line['NVDLA_SDP_BS_ALU_SRC']
                 if asm_line['name'] == 'SDP_D_DP_BN_ALU_CFG':
-                    self.bn_alu_src = asm_line['NVDLA_SDP_D_BN_ALU_SRC']
+                    self.bn_alu_src = asm_line['NVDLA_SDP_BN_ALU_SRC']
                 if asm_line['name'] == 'SDP_D_DP_EW_ALU_CFG':
-                    self.ew_alu_src = asm_line['NVDLA_SDP_D_EW_ALU_SRC']
+                    self.ew_alu_src = asm_line['NVDLA_SDP_EW_ALU_SRC']
                 if asm_line['name'] == 'SDP_D_DP_BS_MUL_CFG':
-                    self.bs_mul_src = asm_line['NVDLA_SDP_D_BS_MUL_SRC']
+                    self.bs_mul_src = asm_line['NVDLA_SDP_BS_MUL_SRC']
                 if asm_line['name'] == 'SDP_D_DP_BN_MUL_CFG':
-                    self.bn_mul_src = asm_line['NVDLA_SDP_D_BN_MUL_SRC']
+                    self.bn_mul_src = asm_line['NVDLA_SDP_BN_MUL_SRC']
                 if asm_line['name'] == 'SDP_D_DP_EW_MUL_CFG':
-                    self.ew_mul_src = asm_line['NVDLA_SDP_D_EW_MUL_SRC']
+                    self.ew_mul_src = asm_line['NVDLA_SDP_EW_MUL_SRC']
                 if asm_line['name'] == 'SDP_D_DP_BS_ALU_SRC_VALUE':
-                    self.bs_reg_alu_operand = asm_line['NVDLA_SDP_D_DP_BS_ALU_SRC_VALUE']
+                    self.bs_reg_alu_operand = asm_line['NVDLA_SDP_DP_BS_ALU_SRC_VALUE']
                 if asm_line['name'] == 'SDP_D_DP_BS_MUL_SRC_VALUE':
-                    self.bs_reg_mul_operand = asm_line['NVDLA_SDP_D_DP_BS_MUL_SRC_VALUE']
+                    self.bs_reg_mul_operand = asm_line['NVDLA_SDP_DP_BS_MUL_SRC_VALUE']
                 if asm_line['name'] == 'SDP_D_DP_BN_ALU_SRC_VALUE':
-                    self.bn_reg_alu_operand = asm_line['NVDLA_SDP_D_DP_BN_ALU_SRC_VALUE']
+                    self.bn_reg_alu_operand = asm_line['NVDLA_SDP_DP_BN_ALU_SRC_VALUE']
                 if asm_line['name'] == 'SDP_D_DP_BN_MUL_SRC_VALUE':
-                    self.bn_reg_mul_operand = asm_line['NVDLA_SDP_D_DP_BN_MUL_SRC_VALUE']
+                    self.bn_reg_mul_operand = asm_line['NVDLA_SDP_DP_BN_MUL_SRC_VALUE']
                 if asm_line['name'] == 'SDP_D_DP_EW_ALU_SRC_VALUE':
-                    self.ew_reg_alu_operand = asm_line['NVDLA_SDP_D_DP_EW_ALU_SRC_VALUE']
+                    self.ew_reg_alu_operand = asm_line['NVDLA_SDP_DP_EW_ALU_SRC_VALUE']
                 if asm_line['name'] == 'SDP_D_DP_EW_ALU_SRC_VALUE':
-                    self.ew_reg_mul_operand = asm_line['NVDLA_SDP_D_DP_EW_MUL_SRC_VALUE']
+                    self.ew_reg_mul_operand = asm_line['NVDLA_SDP_DP_EW_MUL_SRC_VALUE']
 
                 if asm_line['name'] == 'SDP_D_DATA_CUBE_WIDTH':
-                    self.inp1_shape[0] = asm_line['NVDLA_SDP_D_DATA_CUBE_WIDTH']
+                    self.inp1_shape[0] = asm_line['NVDLA_SDP_WIDTH']
                 if asm_line['name'] == 'SDP_D_DATA_CUBE_HEIGHT':
-                    self.inp1_shape[1] = asm_line['NVDLA_SDP_D_DATA_CUBE_HEIGHT']
+                    self.inp1_shape[1] = asm_line['NVDLA_SDP_HEIGHT']
                 if asm_line['name'] == 'SDP_D_DATA_CUBE_CHANNEL':
-                    self.inp1_shape[2] = asm_line['NVDLA_SDP_D_DATA_CUBE_CHANNEL']
+                    self.inp1_shape[2] = asm_line['NVDLA_SDP_CHANNEL']
             elif asm_line['name'] == 'VirMemWr':
                 # max size of main input is 128000 2 byte atoms
                 if int(asm_line['addr'], 16) < 128000 * 2:

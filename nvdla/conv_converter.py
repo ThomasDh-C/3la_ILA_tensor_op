@@ -25,6 +25,8 @@ class ConvConverter:
         self.prog_frag = []
         for asm_line in self.asm_list:
             if asm_line['name'] in self.param_shifts_for_csb:
+                if 'CMAC_A' not in asm_line['name']:
+                    continue
                 # append to prog frag based on that and find inp_addr_end
                 instr = {"instr No.": len(self.prog_frag)}
 
@@ -50,7 +52,8 @@ class ConvConverter:
                     data = param_binary + data
                 # data for registers is put in int format in example
                 hex_data = hex(int(data, 2))[2:]
-                instr['cmac_csb2cmac_data'] = '0x'+(8-len(hex_data))*'0'+hex_data
+                instr['cmac_csb2cmac_data'] = '0x' + \
+                    (8-len(hex_data))*'0'+hex_data
                 instr['cmac_csb2cmac_write'] = 1
                 instr['cmac_csb2cmac_vld'] = 1
                 self.prog_frag.append(instr)

@@ -102,7 +102,8 @@ class conv_driver:
         # --- SETUP ---
         self.ila_asm.append({
             'name': 'CMAC_A_S_POINTER',
-            'NVDLA_CMAC_A_PRODUCER': 0
+            'NVDLA_CMAC_A_PRODUCER': 0,
+            'NVDLA_CMAC_A_CONSUMER': 0
         })
         # Conv mode does joining cores. In simulator CMAC_A_D_MISC_CFG currently unused
         # NVDLA_CMAC_A_PROC_PRECISION: 0 = 8 bit, 1 = 16 bit

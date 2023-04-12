@@ -103,19 +103,20 @@ class relu_driver:
         """
         self.ila_asm.append({
             'name': 'SDP_S_POINTER',
-            'NVDLA_SDP_S_PRODUCER': 0
+            'NVDLA_SDP_PRODUCER': 0,
+            'NVDLA_SDP_CONSUMER': 0
         })
         self.ila_asm.append({
             'name': 'SDP_D_DATA_CUBE_WIDTH',
-            'NVDLA_SDP_D_DATA_CUBE_WIDTH': self.inp1_shape[0]
+            'NVDLA_SDP_WIDTH': self.inp1_shape[0]
         })
         self.ila_asm.append({
             'name': 'SDP_D_DATA_CUBE_HEIGHT',
-            'NVDLA_SDP_D_DATA_CUBE_HEIGHT': self.inp1_shape[1]
+            'NVDLA_SDP_HEIGHT': self.inp1_shape[1]
         })
         self.ila_asm.append({
             'name': 'SDP_D_DATA_CUBE_CHANNEL',
-            'NVDLA_SDP_D_DATA_CUBE_CHANNEL': self.inp1_shape[2]
+            'NVDLA_SDP_CHANNEL': self.inp1_shape[2]
         })
         self.produce_no_lut_asm()
         if self.op_name == 'layer_relu':
@@ -141,9 +142,9 @@ class relu_driver:
         """Shouldn't be needed but simulator requires that luts be configured even if unused"""
         self.ila_asm.append({
             'name': 'SDP_S_LUT_INFO',
-            'NVDLA_SDP_S_LUT_LE_INDEX_OFFSET': 0,
-            'NVDLA_SDP_S_LUT_LE_INDEX_SELECT': 0,
-            'NVDLA_SDP_S_LUT_LO_INDEX_SELECT': 0
+            'NVDLA_SDP_LUT_LE_INDEX_OFFSET': 0,
+            'NVDLA_SDP_LUT_LE_INDEX_SELECT': 0,
+            'NVDLA_SDP_LUT_LO_INDEX_SELECT': 0
         })
 
     def produce_relu_asm(self):
@@ -153,42 +154,42 @@ class relu_driver:
         # bypass alu and mul, but leave relu on
         self.ila_asm.append({
             'name': 'SDP_D_DP_BS_CFG',
-            'NVDLA_SDP_D_BS_BYPASS': 0,
-            'NVDLA_SDP_D_BS_ALU_BYPASS': 1,
-            'NVDLA_SDP_D_BS_ALU_ALGO': 0,
-            'NVDLA_SDP_D_BS_MUL_BYPASS': 1,
-            'NVDLA_SDP_D_BS_MUL_PRELU': 0,
-            'NVDLA_SDP_D_BS_RELU_BYPASS': 0
+            'NVDLA_SDP_BS_BYPASS': 0,
+            'NVDLA_SDP_BS_ALU_BYPASS': 1,
+            'NVDLA_SDP_BS_ALU_ALGO': 0,
+            'NVDLA_SDP_BS_MUL_BYPASS': 1,
+            'NVDLA_SDP_BS_MUL_PRELU': 0,
+            'NVDLA_SDP_BS_RELU_BYPASS': 0
         })
         # bypass x2 and y
         self.ila_asm.append({
             'name': 'SDP_D_DP_BN_CFG',
-            'NVDLA_SDP_D_BN_BYPASS': 1,
-            'NVDLA_SDP_D_BN_ALU_BYPASS': 0,
-            'NVDLA_SDP_D_BN_ALU_ALGO': 0,
-            'NVDLA_SDP_D_BN_MUL_BYPASS': 0,
-            'NVDLA_SDP_D_BN_MUL_PRELU': 0,
-            'NVDLA_SDP_D_BN_RELU_BYPASS': 0
+            'NVDLA_SDP_BN_BYPASS': 1,
+            'NVDLA_SDP_BN_ALU_BYPASS': 0,
+            'NVDLA_SDP_BN_ALU_ALGO': 0,
+            'NVDLA_SDP_BN_MUL_BYPASS': 0,
+            'NVDLA_SDP_BN_MUL_PRELU': 0,
+            'NVDLA_SDP_BN_RELU_BYPASS': 0
         })
         self.ila_asm.append({
             'name': 'SDP_D_DP_EW_CFG',
-            'NVDLA_SDP_D_EW_BYPASS': 1,
-            'NVDLA_SDP_D_EW_ALU_BYPASS': 0,
-            'NVDLA_SDP_D_EW_ALU_ALGO': 0,
-            'NVDLA_SDP_D_EW_MUL_BYPASS': 0,
-            'NVDLA_SDP_D_EW_MUL_PRELU': 0,
-            'NVDLA_SDP_D_EW_LUT_BYPASS': 1
+            'NVDLA_SDP_EW_BYPASS': 1,
+            'NVDLA_SDP_EW_ALU_BYPASS': 0,
+            'NVDLA_SDP_EW_ALU_ALGO': 0,
+            'NVDLA_SDP_EW_MUL_BYPASS': 0,
+            'NVDLA_SDP_EW_MUL_PRELU': 0,
+            'NVDLA_SDP_EW_LUT_BYPASS': 1
         })
         # if flying false (0), data from mrdma_data
         # if flying true (1), data from cacc_data (prev core)
         # here use false
         self.ila_asm.append({
             'name': 'SDP_D_FEATURE_MODE_CFG',
-            'NVDLA_SDP_D_FLYING_MODE': 0,
-            'NVDLA_SDP_D_OUTPUT_DST': 0,
-            'NVDLA_SDP_D_WINOGRAD': 0,
-            'NVDLA_SDP_D_NAN_TO_ZERO': 0,
-            'NVDLA_SDP_D_BATCH_NUMBER': 0
+            'NVDLA_SDP_FLYING_MODE': 0,
+            'NVDLA_SDP_OUTPUT_DST': 0,
+            'NVDLA_SDP_WINOGRAD': 0,
+            'NVDLA_SDP_NAN_TO_ZERO': 0,
+            'NVDLA_SDP_BATCH_NUMBER': 0
         })
         # enable means ready for incoming data
         self.ila_asm.append({
@@ -208,77 +209,77 @@ class relu_driver:
         # bypass relu, don't bypass alu and set to add
         self.ila_asm.append({
             'name': 'SDP_D_DP_BS_CFG',
-            'NVDLA_SDP_D_BS_BYPASS': 0,
-            'NVDLA_SDP_D_BS_ALU_BYPASS': 0,
-            'NVDLA_SDP_D_BS_ALU_ALGO': 2,
-            'NVDLA_SDP_D_BS_MUL_BYPASS': 1,
-            'NVDLA_SDP_D_BS_MUL_PRELU': 0,
-            'NVDLA_SDP_D_BS_RELU_BYPASS': 1
+            'NVDLA_SDP_BS_BYPASS': 0,
+            'NVDLA_SDP_BS_ALU_BYPASS': 0,
+            'NVDLA_SDP_BS_ALU_ALGO': 2,
+            'NVDLA_SDP_BS_MUL_BYPASS': 1,
+            'NVDLA_SDP_BS_MUL_PRELU': 0,
+            'NVDLA_SDP_BS_RELU_BYPASS': 1
         })
         # bypass x2 and y
         self.ila_asm.append({
             'name': 'SDP_D_DP_BN_CFG',
-            'NVDLA_SDP_D_BN_BYPASS': 1,
-            'NVDLA_SDP_D_BN_ALU_BYPASS': 0,
-            'NVDLA_SDP_D_BN_ALU_ALGO': 0,
-            'NVDLA_SDP_D_BN_MUL_BYPASS': 0,
-            'NVDLA_SDP_D_BN_MUL_PRELU': 0,
-            'NVDLA_SDP_D_BN_RELU_BYPASS': 0
+            'NVDLA_SDP_BN_BYPASS': 1,
+            'NVDLA_SDP_BN_ALU_BYPASS': 0,
+            'NVDLA_SDP_BN_ALU_ALGO': 0,
+            'NVDLA_SDP_BN_MUL_BYPASS': 0,
+            'NVDLA_SDP_BN_MUL_PRELU': 0,
+            'NVDLA_SDP_BN_RELU_BYPASS': 0
         })
         self.ila_asm.append({
             'name': 'SDP_D_DP_EW_CFG',
-            'NVDLA_SDP_D_EW_BYPASS': 1,
-            'NVDLA_SDP_D_EW_ALU_BYPASS': 0,
-            'NVDLA_SDP_D_EW_ALU_ALGO': 0,
-            'NVDLA_SDP_D_EW_MUL_BYPASS': 0,
-            'NVDLA_SDP_D_EW_MUL_PRELU': 0,
-            'NVDLA_SDP_D_EW_LUT_BYPASS': 1
+            'NVDLA_SDP_EW_BYPASS': 1,
+            'NVDLA_SDP_EW_ALU_BYPASS': 0,
+            'NVDLA_SDP_EW_ALU_ALGO': 0,
+            'NVDLA_SDP_EW_MUL_BYPASS': 0,
+            'NVDLA_SDP_EW_MUL_PRELU': 0,
+            'NVDLA_SDP_EW_LUT_BYPASS': 1
         })
         # if flying false (0), data from mrdma_data
         # if flying true (1), data from cacc_data (prev core)
         # here use false
         self.ila_asm.append({
             'name': 'SDP_D_FEATURE_MODE_CFG',
-            'NVDLA_SDP_D_FLYING_MODE': 0,
-            'NVDLA_SDP_D_OUTPUT_DST': 0,
-            'NVDLA_SDP_D_WINOGRAD': 0,
-            'NVDLA_SDP_D_NAN_TO_ZERO': 0,
-            'NVDLA_SDP_D_BATCH_NUMBER': 0
+            'NVDLA_SDP_FLYING_MODE': 0,
+            'NVDLA_SDP_OUTPUT_DST': 0,
+            'NVDLA_SDP_WINOGRAD': 0,
+            'NVDLA_SDP_NAN_TO_ZERO': 0,
+            'NVDLA_SDP_BATCH_NUMBER': 0
         })
         # BS_ALU_SRC
         #   0 = data from regs_data_alu_ --> constant input
         #   1 = data from dma_data_alu_ --> matrix of input
         self.ila_asm.append({
             'name': 'SDP_D_DP_BS_ALU_CFG',
-            'NVDLA_SDP_D_BS_ALU_SRC': 1,
-            'NVDLA_SDP_D_BS_ALU_SHIFT_VALUE': 0,
+            'NVDLA_SDP_BS_ALU_SRC': 1,
+            'NVDLA_SDP_BS_ALU_SHIFT_VALUE': 0,
         })
         # even if not using mul, output of alu still shifted by the shift value
         self.ila_asm.append({
             'name': 'SDP_D_DP_BS_MUL_CFG',
-            'NVDLA_SDP_D_BS_MUL_SRC': 0,
-            'NVDLA_SDP_D_BS_MUL_SHIFT_VALUE': 0,
+            'NVDLA_SDP_BS_MUL_SRC': 0,
+            'NVDLA_SDP_BS_MUL_SHIFT_VALUE': 0,
         })
         # the simulator still does stuff with CVT before storing
         # so config everything to 0
         self.ila_asm.append({
             'name': 'SDP_D_CVT_OFFSET',
-            'NVDLA_SDP_D_CVT_OFFSET': 0
+            'NVDLA_SDP_CVT_OFFSET': 0
         })
         self.ila_asm.append({
             'name': 'SDP_D_CVT_SCALE',
-            'NVDLA_SDP_D_CVT_SCALE': 1
+            'NVDLA_SDP_CVT_SCALE': 1
         })
         self.ila_asm.append({
             'name': 'SDP_D_CVT_SHIFT',
-            'NVDLA_SDP_D_CVT_SHIFT': 0
+            'NVDLA_SDP_CVT_SHIFT': 0
         })
-        # NVDLA_SDP_D_PROC_PRECISION unused in sim
-        # NVDLA_SDP_D_OUT_PRECISION: 0 = 8 bit, 1 = 16 bit
+        # NVDLA_SDP_PROC_PRECISION unused in sim
+        # NVDLA_SDP_OUT_PRECISION: 0 = 8 bit, 1 = 16 bit
         self.ila_asm.append({
             'name': 'SDP_D_DATA_FORMAT',
-            'NVDLA_SDP_D_PROC_PRECISION': 1,
-            'NVDLA_SDP_D_OUT_PRECISION': 1,
+            'NVDLA_SDP_PROC_PRECISION': 1,
+            'NVDLA_SDP_OUT_PRECISION': 1,
         })
 
         # enable means ready for incoming data
@@ -309,77 +310,77 @@ class relu_driver:
         # bypass relu, don't bypass alu and set to add
         self.ila_asm.append({
             'name': 'SDP_D_DP_BS_CFG',
-            'NVDLA_SDP_D_BS_BYPASS': 0,
-            'NVDLA_SDP_D_BS_ALU_BYPASS': 0,
-            'NVDLA_SDP_D_BS_ALU_ALGO': alu_op_convert[op],
-            'NVDLA_SDP_D_BS_MUL_BYPASS': 1,
-            'NVDLA_SDP_D_BS_MUL_PRELU': 0,
-            'NVDLA_SDP_D_BS_RELU_BYPASS': 1
+            'NVDLA_SDP_BS_BYPASS': 0,
+            'NVDLA_SDP_BS_ALU_BYPASS': 0,
+            'NVDLA_SDP_BS_ALU_ALGO': alu_op_convert[op],
+            'NVDLA_SDP_BS_MUL_BYPASS': 1,
+            'NVDLA_SDP_BS_MUL_PRELU': 0,
+            'NVDLA_SDP_BS_RELU_BYPASS': 1
         })
         # bypass x2 and y
         self.ila_asm.append({
             'name': 'SDP_D_DP_BN_CFG',
-            'NVDLA_SDP_D_BN_BYPASS': 1,
-            'NVDLA_SDP_D_BN_ALU_BYPASS': 0,
-            'NVDLA_SDP_D_BN_ALU_ALGO': 0,
-            'NVDLA_SDP_D_BN_MUL_BYPASS': 0,
-            'NVDLA_SDP_D_BN_MUL_PRELU': 0,
-            'NVDLA_SDP_D_BN_RELU_BYPASS': 0
+            'NVDLA_SDP_BN_BYPASS': 1,
+            'NVDLA_SDP_BN_ALU_BYPASS': 0,
+            'NVDLA_SDP_BN_ALU_ALGO': 0,
+            'NVDLA_SDP_BN_MUL_BYPASS': 0,
+            'NVDLA_SDP_BN_MUL_PRELU': 0,
+            'NVDLA_SDP_BN_RELU_BYPASS': 0
         })
         self.ila_asm.append({
             'name': 'SDP_D_DP_EW_CFG',
-            'NVDLA_SDP_D_EW_BYPASS': 1,
-            'NVDLA_SDP_D_EW_ALU_BYPASS': 0,
-            'NVDLA_SDP_D_EW_ALU_ALGO': 0,
-            'NVDLA_SDP_D_EW_MUL_BYPASS': 0,
-            'NVDLA_SDP_D_EW_MUL_PRELU': 0,
-            'NVDLA_SDP_D_EW_LUT_BYPASS': 1
+            'NVDLA_SDP_EW_BYPASS': 1,
+            'NVDLA_SDP_EW_ALU_BYPASS': 0,
+            'NVDLA_SDP_EW_ALU_ALGO': 0,
+            'NVDLA_SDP_EW_MUL_BYPASS': 0,
+            'NVDLA_SDP_EW_MUL_PRELU': 0,
+            'NVDLA_SDP_EW_LUT_BYPASS': 1
         })
         # if flying false (0), data from mrdma_data
         # if flying true (1), data from cacc_data (prev core)
         # here use false
         self.ila_asm.append({
             'name': 'SDP_D_FEATURE_MODE_CFG',
-            'NVDLA_SDP_D_FLYING_MODE': 0,
-            'NVDLA_SDP_D_OUTPUT_DST': 0,
-            'NVDLA_SDP_D_WINOGRAD': 0,
-            'NVDLA_SDP_D_NAN_TO_ZERO': 0,
-            'NVDLA_SDP_D_BATCH_NUMBER': 0
+            'NVDLA_SDP_FLYING_MODE': 0,
+            'NVDLA_SDP_OUTPUT_DST': 0,
+            'NVDLA_SDP_WINOGRAD': 0,
+            'NVDLA_SDP_NAN_TO_ZERO': 0,
+            'NVDLA_SDP_BATCH_NUMBER': 0
         })
         # BS_ALU_SRC
         #   0 = data from regs_data_alu_ --> constant input
         #   1 = data from dma_data_alu_ --> matrix of input
         self.ila_asm.append({
             'name': 'SDP_D_DP_BS_ALU_CFG',
-            'NVDLA_SDP_D_BS_ALU_SRC': 1,
-            'NVDLA_SDP_D_BS_ALU_SHIFT_VALUE': 0,
+            'NVDLA_SDP_BS_ALU_SRC': 1,
+            'NVDLA_SDP_BS_ALU_SHIFT_VALUE': 0,
         })
         # even if not using mul, output of alu still shifted by the shift value
         self.ila_asm.append({
             'name': 'SDP_D_DP_BS_MUL_CFG',
-            'NVDLA_SDP_D_BS_MUL_SRC': 0,
-            'NVDLA_SDP_D_BS_MUL_SHIFT_VALUE': 0,
+            'NVDLA_SDP_BS_MUL_SRC': 0,
+            'NVDLA_SDP_BS_MUL_SHIFT_VALUE': 0,
         })
         # the simulator still does stuff with CVT before storing
         # so config everything to 0
         self.ila_asm.append({
             'name': 'SDP_D_CVT_OFFSET',
-            'NVDLA_SDP_D_CVT_OFFSET': 0
+            'NVDLA_SDP_CVT_OFFSET': 0
         })
         self.ila_asm.append({
             'name': 'SDP_D_CVT_SCALE',
-            'NVDLA_SDP_D_CVT_SCALE': 1
+            'NVDLA_SDP_CVT_SCALE': 1
         })
         self.ila_asm.append({
             'name': 'SDP_D_CVT_SHIFT',
-            'NVDLA_SDP_D_CVT_SHIFT': 0
+            'NVDLA_SDP_CVT_SHIFT': 0
         })
-        # NVDLA_SDP_D_PROC_PRECISION unused in sim
-        # NVDLA_SDP_D_OUT_PRECISION: 0 = 8 bit, 1 = 16 bit
+        # NVDLA_SDP_PROC_PRECISION unused in sim
+        # NVDLA_SDP_OUT_PRECISION: 0 = 8 bit, 1 = 16 bit
         self.ila_asm.append({
             'name': 'SDP_D_DATA_FORMAT',
-            'NVDLA_SDP_D_PROC_PRECISION': 1,
-            'NVDLA_SDP_D_OUT_PRECISION': 1,
+            'NVDLA_SDP_PROC_PRECISION': 1,
+            'NVDLA_SDP_OUT_PRECISION': 1,
         })
         # enable means ready for incoming data
         self.ila_asm.append({
@@ -405,76 +406,76 @@ class relu_driver:
         # bypass relu, don't bypass alu and set to mul (prelu = 0)
         self.ila_asm.append({
             'name': 'SDP_D_DP_BS_CFG',
-            'NVDLA_SDP_D_BS_BYPASS': 0,
-            'NVDLA_SDP_D_BS_ALU_BYPASS': 1,
-            'NVDLA_SDP_D_BS_ALU_ALGO': 0,
-            'NVDLA_SDP_D_BS_MUL_BYPASS': 0,
-            'NVDLA_SDP_D_BS_MUL_PRELU': mul_op_convert[op],
-            'NVDLA_SDP_D_BS_RELU_BYPASS': 1
+            'NVDLA_SDP_BS_BYPASS': 0,
+            'NVDLA_SDP_BS_ALU_BYPASS': 1,
+            'NVDLA_SDP_BS_ALU_ALGO': 0,
+            'NVDLA_SDP_BS_MUL_BYPASS': 0,
+            'NVDLA_SDP_BS_MUL_PRELU': mul_op_convert[op],
+            'NVDLA_SDP_BS_RELU_BYPASS': 1
         })
         # bypass x2 and y
         self.ila_asm.append({
             'name': 'SDP_D_DP_BN_CFG',
-            'NVDLA_SDP_D_BN_BYPASS': 1,
-            'NVDLA_SDP_D_BN_ALU_BYPASS': 0,
-            'NVDLA_SDP_D_BN_ALU_ALGO': 0,
-            'NVDLA_SDP_D_BN_MUL_BYPASS': 0,
-            'NVDLA_SDP_D_BN_MUL_PRELU': 0,
-            'NVDLA_SDP_D_BN_RELU_BYPASS': 0
+            'NVDLA_SDP_BN_BYPASS': 1,
+            'NVDLA_SDP_BN_ALU_BYPASS': 0,
+            'NVDLA_SDP_BN_ALU_ALGO': 0,
+            'NVDLA_SDP_BN_MUL_BYPASS': 0,
+            'NVDLA_SDP_BN_MUL_PRELU': 0,
+            'NVDLA_SDP_BN_RELU_BYPASS': 0
         })
         self.ila_asm.append({
             'name': 'SDP_D_DP_EW_CFG',
-            'NVDLA_SDP_D_EW_BYPASS': 1,
-            'NVDLA_SDP_D_EW_ALU_BYPASS': 0,
-            'NVDLA_SDP_D_EW_ALU_ALGO': 0,
-            'NVDLA_SDP_D_EW_MUL_BYPASS': 0,
-            'NVDLA_SDP_D_EW_MUL_PRELU': 0,
-            'NVDLA_SDP_D_EW_LUT_BYPASS': 1
+            'NVDLA_SDP_EW_BYPASS': 1,
+            'NVDLA_SDP_EW_ALU_BYPASS': 0,
+            'NVDLA_SDP_EW_ALU_ALGO': 0,
+            'NVDLA_SDP_EW_MUL_BYPASS': 0,
+            'NVDLA_SDP_EW_MUL_PRELU': 0,
+            'NVDLA_SDP_EW_LUT_BYPASS': 1
         })
         # if flying false (0), data from mrdma_data
         # if flying true (1), data from cacc_data (prev core)
         # here use false
         self.ila_asm.append({
             'name': 'SDP_D_FEATURE_MODE_CFG',
-            'NVDLA_SDP_D_FLYING_MODE': 0,
-            'NVDLA_SDP_D_OUTPUT_DST': 0,
-            'NVDLA_SDP_D_WINOGRAD': 0,
-            'NVDLA_SDP_D_NAN_TO_ZERO': 0,
-            'NVDLA_SDP_D_BATCH_NUMBER': 0
+            'NVDLA_SDP_FLYING_MODE': 0,
+            'NVDLA_SDP_OUTPUT_DST': 0,
+            'NVDLA_SDP_WINOGRAD': 0,
+            'NVDLA_SDP_NAN_TO_ZERO': 0,
+            'NVDLA_SDP_BATCH_NUMBER': 0
         })
         # BS_ALU_SRC
         # not using but have to make sure shift is 0
         self.ila_asm.append({
             'name': 'SDP_D_DP_BS_ALU_CFG',
-            'NVDLA_SDP_D_BS_ALU_SRC': 0,
-            'NVDLA_SDP_D_BS_ALU_SHIFT_VALUE': 0,
+            'NVDLA_SDP_BS_ALU_SRC': 0,
+            'NVDLA_SDP_BS_ALU_SHIFT_VALUE': 0,
         })
         # get input from dma
         self.ila_asm.append({
             'name': 'SDP_D_DP_BS_MUL_CFG',
-            'NVDLA_SDP_D_BS_MUL_SRC': 1,
-            'NVDLA_SDP_D_BS_MUL_SHIFT_VALUE': 0,
+            'NVDLA_SDP_BS_MUL_SRC': 1,
+            'NVDLA_SDP_BS_MUL_SHIFT_VALUE': 0,
         })
         # the simulator still does stuff with CVT before storing
         # so config everything to 0
         self.ila_asm.append({
             'name': 'SDP_D_CVT_OFFSET',
-            'NVDLA_SDP_D_CVT_OFFSET': 0
+            'NVDLA_SDP_CVT_OFFSET': 0
         })
         self.ila_asm.append({
             'name': 'SDP_D_CVT_SCALE',
-            'NVDLA_SDP_D_CVT_SCALE': 1
+            'NVDLA_SDP_CVT_SCALE': 1
         })
         self.ila_asm.append({
             'name': 'SDP_D_CVT_SHIFT',
-            'NVDLA_SDP_D_CVT_SHIFT': 0
+            'NVDLA_SDP_CVT_SHIFT': 0
         })
-        # NVDLA_SDP_D_PROC_PRECISION unused in sim
-        # NVDLA_SDP_D_OUT_PRECISION: 0 = 8 bit, 1 = 16 bit
+        # NVDLA_SDP_PROC_PRECISION unused in sim
+        # NVDLA_SDP_OUT_PRECISION: 0 = 8 bit, 1 = 16 bit
         self.ila_asm.append({
             'name': 'SDP_D_DATA_FORMAT',
-            'NVDLA_SDP_D_PROC_PRECISION': 1,
-            'NVDLA_SDP_D_OUT_PRECISION': 1,
+            'NVDLA_SDP_PROC_PRECISION': 1,
+            'NVDLA_SDP_OUT_PRECISION': 1,
         })
         # enable means ready for incoming data
         self.ila_asm.append({
@@ -499,77 +500,77 @@ class relu_driver:
         # bypass relu, alu to add (alu_algo=2) and mul to mul (prelu=0)
         self.ila_asm.append({
             'name': 'SDP_D_DP_BS_CFG',
-            'NVDLA_SDP_D_BS_BYPASS': 0,
-            'NVDLA_SDP_D_BS_ALU_BYPASS': 0,
-            'NVDLA_SDP_D_BS_ALU_ALGO': 2,
-            'NVDLA_SDP_D_BS_MUL_BYPASS': 0,
-            'NVDLA_SDP_D_BS_MUL_PRELU': 0,
-            'NVDLA_SDP_D_BS_RELU_BYPASS': 1
+            'NVDLA_SDP_BS_BYPASS': 0,
+            'NVDLA_SDP_BS_ALU_BYPASS': 0,
+            'NVDLA_SDP_BS_ALU_ALGO': 2,
+            'NVDLA_SDP_BS_MUL_BYPASS': 0,
+            'NVDLA_SDP_BS_MUL_PRELU': 0,
+            'NVDLA_SDP_BS_RELU_BYPASS': 1
         })
         # bypass x2 and y
         self.ila_asm.append({
             'name': 'SDP_D_DP_BN_CFG',
-            'NVDLA_SDP_D_BN_BYPASS': 1,
-            'NVDLA_SDP_D_BN_ALU_BYPASS': 0,
-            'NVDLA_SDP_D_BN_ALU_ALGO': 0,
-            'NVDLA_SDP_D_BN_MUL_BYPASS': 0,
-            'NVDLA_SDP_D_BN_MUL_PRELU': 0,
-            'NVDLA_SDP_D_BN_RELU_BYPASS': 0
+            'NVDLA_SDP_BN_BYPASS': 1,
+            'NVDLA_SDP_BN_ALU_BYPASS': 0,
+            'NVDLA_SDP_BN_ALU_ALGO': 0,
+            'NVDLA_SDP_BN_MUL_BYPASS': 0,
+            'NVDLA_SDP_BN_MUL_PRELU': 0,
+            'NVDLA_SDP_BN_RELU_BYPASS': 0
         })
         self.ila_asm.append({
             'name': 'SDP_D_DP_EW_CFG',
-            'NVDLA_SDP_D_EW_BYPASS': 1,
-            'NVDLA_SDP_D_EW_ALU_BYPASS': 0,
-            'NVDLA_SDP_D_EW_ALU_ALGO': 0,
-            'NVDLA_SDP_D_EW_MUL_BYPASS': 0,
-            'NVDLA_SDP_D_EW_MUL_PRELU': 0,
-            'NVDLA_SDP_D_EW_LUT_BYPASS': 1
+            'NVDLA_SDP_EW_BYPASS': 1,
+            'NVDLA_SDP_EW_ALU_BYPASS': 0,
+            'NVDLA_SDP_EW_ALU_ALGO': 0,
+            'NVDLA_SDP_EW_MUL_BYPASS': 0,
+            'NVDLA_SDP_EW_MUL_PRELU': 0,
+            'NVDLA_SDP_EW_LUT_BYPASS': 1
         })
         # if flying false (0), data from mrdma_data
         # if flying true (1), data from cacc_data (prev core)
         # here use false
         self.ila_asm.append({
             'name': 'SDP_D_FEATURE_MODE_CFG',
-            'NVDLA_SDP_D_FLYING_MODE': 0,
-            'NVDLA_SDP_D_OUTPUT_DST': 0,
-            'NVDLA_SDP_D_WINOGRAD': 0,
-            'NVDLA_SDP_D_NAN_TO_ZERO': 0,
-            'NVDLA_SDP_D_BATCH_NUMBER': 0
+            'NVDLA_SDP_FLYING_MODE': 0,
+            'NVDLA_SDP_OUTPUT_DST': 0,
+            'NVDLA_SDP_WINOGRAD': 0,
+            'NVDLA_SDP_NAN_TO_ZERO': 0,
+            'NVDLA_SDP_BATCH_NUMBER': 0
         })
         # BS_ALU_SRC
         #   0 = data from regs_data_alu_ --> constant input
         #   1 = data from dma_data_alu_ --> matrix of input
         self.ila_asm.append({
             'name': 'SDP_D_DP_BS_ALU_CFG',
-            'NVDLA_SDP_D_BS_ALU_SRC': per_convert[per],
-            'NVDLA_SDP_D_BS_ALU_SHIFT_VALUE': 0,
+            'NVDLA_SDP_BS_ALU_SRC': per_convert[per],
+            'NVDLA_SDP_BS_ALU_SHIFT_VALUE': 0,
         })
         # even if not using mul, output of alu still shifted by the shift value
         self.ila_asm.append({
             'name': 'SDP_D_DP_BS_MUL_CFG',
-            'NVDLA_SDP_D_BS_MUL_SRC': per_convert[per],
-            'NVDLA_SDP_D_BS_MUL_SHIFT_VALUE': 0,
+            'NVDLA_SDP_BS_MUL_SRC': per_convert[per],
+            'NVDLA_SDP_BS_MUL_SHIFT_VALUE': 0,
         })
         # the simulator still does stuff with CVT before storing
         # so config everything to 0
         self.ila_asm.append({
             'name': 'SDP_D_CVT_OFFSET',
-            'NVDLA_SDP_D_CVT_OFFSET': 0
+            'NVDLA_SDP_CVT_OFFSET': 0
         })
         self.ila_asm.append({
             'name': 'SDP_D_CVT_SCALE',
-            'NVDLA_SDP_D_CVT_SCALE': 1
+            'NVDLA_SDP_CVT_SCALE': 1
         })
         self.ila_asm.append({
             'name': 'SDP_D_CVT_SHIFT',
-            'NVDLA_SDP_D_CVT_SHIFT': 0
+            'NVDLA_SDP_CVT_SHIFT': 0
         })
-        # NVDLA_SDP_D_PROC_PRECISION unused in sim
-        # NVDLA_SDP_D_OUT_PRECISION: 0 = 8 bit, 1 = 16 bit
+        # NVDLA_SDP_PROC_PRECISION unused in sim
+        # NVDLA_SDP_OUT_PRECISION: 0 = 8 bit, 1 = 16 bit
         self.ila_asm.append({
             'name': 'SDP_D_DATA_FORMAT',
-            'NVDLA_SDP_D_PROC_PRECISION': 1,
-            'NVDLA_SDP_D_OUT_PRECISION': 1,
+            'NVDLA_SDP_PROC_PRECISION': 1,
+            'NVDLA_SDP_OUT_PRECISION': 1,
         })
         # enable means ready for incoming data
         self.ila_asm.append({
@@ -653,11 +654,6 @@ class relu_driver:
         result_unshaped = []
         start_dp, end_dp = min(self.ila_cvtr.dp_indices), max(
             self.ila_cvtr.dp_indices)
-        # config_instrs = self.ila_cvtr.prog_frag[:start_dp]
-        # finish_instrs = self.ila_cvtr.prog_frag[-(
-        #     len(self.ila_cvtr.prog_frag)-1-end_dp):]
-        # with open('temp_sdp_input.json', 'w') as fout:
-        #     json.dump({'program fragment': self.ila_cvtr.prog_frag}, fout, indent=4)
         cmd = [
             "sdp_sim_driver_fast",
             f'./test/{self.op_name}/ila_prog_frag',
