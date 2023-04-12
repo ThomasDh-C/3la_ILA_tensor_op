@@ -12,6 +12,23 @@ import timeit
 from conv_converter import ConvConverter
 
 
+class bcolors:
+    # https://stackoverflow.com/questions/287871/how-do-i-print-colored-text-to-the-terminal
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+
+def red(inp_string):
+    return f'{bcolors.FAIL}{inp_string}{bcolors.ENDC}'
+
+
 class conv_driver:
     def __init__(self, inp_shape, out_shape, kernels_shape, inp_weight_format,
                  kernels_weight_format, dilation, padding, strides):
@@ -143,10 +160,11 @@ class conv_driver:
                             cache_weight_op, n_n_large, n_c_large, n_h, n_w)
 
     def produce_stripe_asm(self, cache_weight_op, n_n_large, n_c_large, n_h, n_w):
-        """Iterate through all inputs this kernel atom can touch"""
+        """Iterate through all inputs this kernel atom can touch
+        n_h and n_w is positon in kernel matrix that is being processed"""
         n, h, w, c = self.inp_matrix.shape
         kern_n, kern_h, kern_w, kern_c = self.kernels_matrix.shape
-        stride_w, strid_h = self.strides
+        stride_w, stride_h = self.strides
         dilation_w, dilation_h = self.dilation
         cmac_calls = 0  # min
         numbers_per_block = 64
@@ -250,14 +268,14 @@ class conv_driver:
             temp_matrix[0, pad_h:h+pad_h,
                         pad_w:w+pad_w, :] = self.inp_matrix
             self.inp_matrix = temp_matrix
-        # print(self.inp_matrix)
+        print('Max of input:', np.max(self.inp_matrix))
 
         with open(f'./data/{self.op_name}/kernels.json', 'r') as fin:
             self.kernels_matrix = np.array(json.load(fin)).astype(
                 'int16').reshape(self.orig_kernels_shape)
             self.kernels_matrix = self.transform_matrix(
                 self.kernels_weight_format, self.desired_kern_format, self.kernels_matrix)
-        # print(self.kernels_matrix)
+        print('Max of kernels:', np.max(self.kernels_matrix))
 
     def produce_prog_frag(self):
         print('\n--------------------------------------------------------------')
@@ -283,12 +301,6 @@ class conv_driver:
 
         sim_output = []
         with open(f'./test/{self.op_name}/ila_prog_frag_out.json', 'r') as fin:
-            # sim_output = fin.readlines()[1::2]  # 1::2 skips datatype lines
-            # sim_output = [l[:-1] if l[-1] == '\n' else l for l in sim_output]
-            # sim_output = [l.strip().split(' ')[1:]
-            #               for l in sim_output]  # remove line number
-            # sim_output = [[int(num_str) for num_str in l]
-            #               for l in sim_output]  # turn to ints
             temp = []
             for l_idx, line in enumerate(fin.readlines()):
                 if line[:9] == 'instr No.':
@@ -326,6 +338,16 @@ class conv_driver:
                             # add on int or pad with 0s
                             k_idx = n_k_large*16 + n_k
                             if k_idx < k:
+                                # new_out = line_vals[n_k] + \
+                                #     nkhw_out[0][k_idx][n_h][n_w]
+                                # if new_out > 32767:
+                                #     print(red(
+                                #         f'WARNING: value {new_out} at {k_idx}, {n_h}, {n_w} is greater than int16 max (32767) - overflow into neg'))
+                                #     # new_out = 32767
+                                # elif new_out < -32768:
+                                #     print(red(
+                                #         f'WARNING: value {new_out} at {k_idx}, {n_h}, {n_w} is less than int16 min (-32768) - overflow into neg'))
+                                #     # new_out = -32768
                                 nkhw_out[0][k_idx][n_h][n_w] += line_vals[n_k]
 
         nkhw_out.tofile(f'./data/{self.op_name}/result.txt', sep='\n')
