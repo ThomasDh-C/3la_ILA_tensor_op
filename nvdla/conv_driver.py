@@ -97,7 +97,7 @@ class conv_driver:
 
     def produce_main_asm(self):
         """
-        produce asm fragment with reg configuration, enable and datapath 
+        produce asm fragment with reg configuration, enable and datapath
         """
         # --- PRE-SETUP CDMA, CSC, CMAC_A, CMAC_B, CACC ---
         self.ila_asm.append({
@@ -127,12 +127,451 @@ class conv_driver:
         })
 
         # --- SETUP CDMA, CSC, CMAC_A, CMAC_B, CACC ---
+        # --- CDMA core configuration ---
+        # adjust whether weights or WMB compression gets more priority in external memory access
+        self.ila_asm.append({
+            'name': 'CDMA_S_ARBITER',
+            'NVDLA_CDMA_ARB_WEIGHT': 0,
+            'NVDLA_CDMA_ARB_WMB': 0
+        })
+        # config conv mode, data type, data reuse, weight reuse,
+        # if reset nvdla should we worry about releasing SBUF
+        # (yes skip release as assume general reset between
+        # NN layers due to curr implementation)
+        self.ila_asm.append({
+            'name': 'CDMA_D_MISC_CFG',
+            'NVDLA_CDMA_CONV_MODE': 0,
+            'NVDLA_CDMA_IN_PRECISION': 1,
+            'NVDLA_CDMA_PROC_PRECISION': 1,
+            'NVDLA_CDMA_DATA_REUSE': 0,
+            'NVDLA_CDMA_WEIGHT_REUSE': 0,
+            'NVDLA_CDMA_SKIP_DATA_RLS': 1
+        })
+        # a) 0 = feature not image
+        # b) unused (see table 33 for formats)
+        # c) unused
+        # d) unused
+        self.ila_asm.append({
+            'name': 'CDMA_D_DATAIN_FORMAT',
+            'NVDLA_CDMA_DATAIN_FORMAT': 0,
+            'NVDLA_CDMA_PIXEL_FORMAT': 0,
+            'NVDLA_CDMA_PIXEL_MAPPING ': 0,
+            'NVDLA_CDMA_PIXEL_SIGN_OVERRIDE': 0
+        })
+        # input data dimensions
+        n, h, w, c = self.inp_matrix.shape
+        self.ila_asm.append({
+            'name': 'CDMA_D_DATAIN_SIZE_0',
+            'NVDLA_CDMA_DATAIN_WIDTH': w,
+            'NVDLA_CDMA_DATAIN_HEIGHT': h
+        })
+        # input data channels
+        self.ila_asm.append({
+            'name': 'CDMA_D_DATAIN_SIZE_1',
+            'NVDLA_CDMA_DATAIN_CHANNEL': c
+        })
+        # width and height after extension
+        self.ila_asm.append({
+            'name': 'CDMA_D_DATAIN_SIZE_EXT_0',
+            'NVDLA_CDMA_DATAIN_WIDTH_EXT': w,
+            'NVDLA_CDMA_DATAIN_HEIGHT_EXT': h
+        })
+        # unused pixel offset
+        self.ila_asm.append({
+            'name': 'CDMA_D_PIXEL_OFFSET',
+            'NVDLA_CDMA_PIXEL_X_OFFSET': 0,
+            'NVDLA_CDMA_PIXEL_Y_OFFSET': 0
+        })
+        # input memory is RAM (use MCIF)
+        self.ila_asm.append({
+            'name': 'CDMA_D_DAIN_RAM_TYPE',
+            'NVDLA_CDMA_DATAIN_RAM_TYPE': 1
+        })
+        # input memory address
+        self.ila_asm.append({
+            'name': 'CDMA_D_DAIN_ADDR_HIGH_0',
+            'NVDLA_CDMA_DATAIN_ADDR_HIGH_0': 0
+        })
+        self.ila_asm.append({
+            'name': 'CDMA_D_DAIN_ADDR_LOW_0',
+            'NVDLA_CDMA_DATAIN_ADDR_LOW_0': 0
+        })
+        # uv plane address for input data (unused)
+        self.ila_asm.append({
+            'name': 'CDMA_D_DAIN_ADDR_HIGH_1',
+            'NVDLA_CDMA_DATAIN_ADDR_HIGH_1': 0
+        })
+        self.ila_asm.append({
+            'name': 'CDMA_D_DAIN_ADDR_LOW_1',
+            'NVDLA_CDMA_DATAIN_ADDR_LOW_1': 0
+        })
+        # input line stride
+        self.ila_asm.append({
+            'name': 'CDMA_D_LINE_STRIDE',
+            'NVDLA_CDMA_LINE_STRIDE': int(w*16*2/2**5)
+        })
+        # uv line stride (unused)
+        self.ila_asm.append({
+            'name': 'CDMA_D_LINE_UV_STRIDE',
+            'NVDLA_CDMA_UV_LINE_STRIDE': 0
+        })
+        # input surface stride
+        self.ila_asm.append({
+            'name': 'CDMA_D_SURF_STRIDE',
+            'NVDLA_CDMA_SURF_STRIDE': int(w*h*16*2/2**5)
+        })
+        # is the data cube as tightly packed as possible (probably not)
+        self.ila_asm.append({
+            'name': 'CDMA_D_DAIN_MAP',
+            'NVDLA_CDMA_LINE_PACKED': 0,
+            'NVDLA_CDMA_SURF_PACKED': 0
+        })
+        # only batch of 1 supported
+        self.ila_asm.append({
+            'name': 'CDMA_D_BATCH_NUMBER',
+            'NVDLA_CDMA_BATCHES': 1
+        })
+        # batch stride is almost hence same as surface stride but for whole cube
+        channel_layers = np.ceil(c/16)
+        self.ila_asm.append({
+            'name': 'CDMA_D_BATCH_STRIDE',
+            'NVDLA_CDMA_BATCH_STRIDE': int(w*h*channel_layers*16*2/2**5)
+        })
+        # entry per slice
+        # based on nvdlahw/cmod/csc/NV_NVDLA_cdma.cpp
+        cbuf_entry_per_slice = (channel_layers / 4) * w
+        if ((channel_layers % 4) == 3):
+            cbuf_entry_per_slice += w
+        elif ((channel_layers % 4) == 2):
+            cbuf_entry_per_slice += (w + 1)/2
+        elif ((channel_layers % 4) == 1):
+            cbuf_entry_per_slice += (w + 3)/4
+        self.ila_asm.append({
+            'name': 'CDMA_D_ENTRY_PER_SLICE',
+            'NVDLA_CDMA_ENTRIES': int(cbuf_entry_per_slice)
+        })
+        # when space for new slice send new slice
+        self.ila_asm.append({
+            'name': 'CDMA_D_FETCH_GRAIN',
+            'NVDLA_CDMA_FETCH_GRAIN': 1
+        })
+        # uncompressed weight (kernels) data
+        self.ila_asm.append({
+            'name': 'CDMA_D_WEIGHT_FORMAT',
+            'NVDLA_CDMA_WEIGHT_FORMAT': 0
+        })
+        # bytes per kernel
+        k_n, k_h, k_w, k_c = self.kernels_matrix.shape
+        kernel_channel_layers = np.ceil(k_c/16)
+        self.ila_asm.append({
+            'name': 'CDMA_D_WEIGHT_SIZE_0',
+            'NVDLA_CDMA_BYTE_PER_KERNEL': int(k_w*k_h*kernel_channel_layers*16*2)
+        })
+        # number of kernels
+        self.ila_asm.append({
+            'name': 'CDMA_D_WEIGHT_SIZE_1',
+            'NVDLA_CDMA_WEIGHT_KERNEL': int(k_n)
+        })
+        # stored in external ram
+        self.ila_asm.append({
+            'name': 'CDMA_D_WEIGHT_RAM_TYPE',
+            'NVDLA_CDMA_WEIGHT_RAM_TYPE': 1
+        })
+        # address of kernels
+        self.ila_asm.append({
+            'name': 'CDMA_D_WEIGHT_ADDR_HIGH',
+            'NVDLA_CDMA_WEIGHT_ADDR_HIGH': 0
+        })
+        self.ila_asm.append({
+            'name': 'CDMA_D_WEIGHT_ADDR_LOW',
+            'NVDLA_CDMA_WEIGHT_ADDR_LOW': int(256000/2**5)
+        })
+        # kernel bytes total
+        self.ila_asm.append({
+            'name': 'CDMA_D_WEIGHT_BYTES',
+            'NVDLA_CDMA_WEIGHT_BYTES': int(k_n*k_w*k_h*kernel_channel_layers*16*2/2**7)
+        })
+        # compression address high and low (unused)
+        self.ila_asm.append({
+            'name': 'CDMA_D_WGS_ADDR_HIGH',
+            'NVDLA_CDMA_WGS_ADDR_HIGH': 0
+        })
+        self.ila_asm.append({
+            'name': 'CDMA_D_WGS_ADDR_LOW',
+            'NVDLA_CDMA_WGS_ADDR_LOW': 0
+        })
+        self.ila_asm.append({
+            'name': 'CDMA_D_WMB_ADDR_HIGH',
+            'NVDLA_CDMA_WMB_ADDR_HIGH': 0
+        })
+        self.ila_asm.append({
+            'name': 'CDMA_D_WMB_ADDR_LOW',
+            'NVDLA_CDMA_WMB_ADDR_LOW': 0
+        })
+        # compression bytes (unused)
+        self.ila_asm.append({
+            'name': 'CDMA_D_WMB_BYTES',
+            'NVDLA_CDMA_WMB_BYTES': 0
+        })
+        # don't use mean registers (unused)
+        self.ila_asm.append({
+            'name': 'CDMA_D_MEAN_FORMAT',
+            'NVDLA_CDMA_MEAN_FORMAT': 0
+        })
+        # mean registers (unused)
+        self.ila_asm.append({
+            'name': 'CDMA_D_MEAN_GLOBAL_0',
+            'NVDLA_CDMA_MEAN_RY': 0,
+            'NVDLA_CDMA_MEAN_GU': 0
+        })
+        self.ila_asm.append({
+            'name': 'CDMA_D_MEAN_GLOBAL_1',
+            'NVDLA_CDMA_MEAN_BV': 0,
+            'NVDLA_CDMA_MEAN_AX': 0
+        })
+        # disable cvt scaling
+        self.ila_asm.append({
+            'name': 'CDMA_D_CVT_CFG',
+            'NVDLA_CDMA_CVT_EN': 0,
+            'NVDLA_CDMA_CVT_TRUNCATE': 0
+        })
+        # cvt params (unused)
+        self.ila_asm.append({
+            'name': 'CDMA_D_CVT_OFFSET',
+            'NVDLA_CDMA_CVT_OFFSET': 0
+        })
+        self.ila_asm.append({
+            'name': 'CDMA_D_CVT_SCALE',
+            'NVDLA_CDMA_CVT_SCALE': 0
+        })
+        # conv stride params
+        self.ila_asm.append({
+            'name': 'CDMA_D_CONV_STRIDE',
+            'NVDLA_CDMA_CONV_X_STRIDE': self.strides[1],
+            'NVDLA_CDMA_CONV_Y_STRIDE': self.strides[0]
+        })
+        # padding .... simulator didn't have padding so driver does padding
+        # so here we set padding to 0 ... in future set to padding[1] and padding[0]
+        self.ila_asm.append({
+            'name': 'CDMA_D_ZERO_PADDING',
+            'NVDLA_CDMA_PAD_LEFT': 0,
+            'NVDLA_CDMA_PAD_RIGHT': 0,
+            'NVDLA_CDMA_PAD_TOP': 0,
+            'NVDLA_CDMA_PAD_BOTTOM': 0
+        })
+        self.ila_asm.append({
+            'name': 'CDMA_D_ZERO_PADDING_VALUE',
+            'NVDLA_CDMA_PAD_VALUE': 0
+        })
+        # how to alocate 16 banks in CBUF to input matrix vs kernel
+        self.ila_asm.append({
+            'name': 'CDMA_D_BANK',
+            'NVDLA_CDMA_BANK': 6,
+            'NVDLA_CDMA_WEIGHT_BANK': 10
+        })
+        # enable flush nan to zero but won't have with int16 (unused)
+        self.ila_asm.append({
+            'name': 'CDMA_D_NAN_FLUSH_TO_ZERO',
+            'NVDLA_CDMA_NAN_TO_ZERO': 1
+        })
+        # turn off performance counters
+        self.ila_asm.append({
+            'name': 'CDMA_D_PERF_ENABLE',
+            'NVDLA_CDMA_DMA_EN': 0
+        })
+
+        # --- CSC core configuration ---
+        # misc cfg - mode = direct not winograd
+        self.ila_asm.append({
+            'name': 'CSC_D_MISC_CFG',
+            'NVDLA_CSC_CONV_MODE': 0,
+            'NVDLA_CSC_IN_PRECISION': 1,
+            'NVDLA_CSC_PROC_PRECISION': 1,
+            'NVDLA_CSC_DATA_REUSE': 0,
+            'NVDLA_CSC_WEIGHT_REUSE': 0,
+            'NVDLA_CSC_SKIP_DATA_RLS': 1,
+            'NVDLA_CSC_SKIP_WEIGHT_RLS': 1
+        })
+        # feature not image input data
+        self.ila_asm.append({
+            'name': 'CSC_D_DATAIN_FORMAT',
+            'NVDLA_CSC_DATAIN_FORMAT': 0
+        })
+        # dimensions input data post extension (but not doing any)
+        self.ila_asm.append({
+            'name': 'CSC_D_DATAIN_SIZE_EXT_0',
+            'NVDLA_CSC_DATAIN_WIDTH_EXT': w,
+            'NVDLA_CSC_DATAIN_HEIGHT_EXT': h
+        })
+        self.ila_asm.append({
+            'name': 'CSC_D_DATAIN_SIZE_EXT_1',
+            'NVDLA_CSC_DATAIN_CHANNEL_EXT': c
+        })
+        assert n == 1, "Batch size over 1 not supported by driver currently"
+        self.ila_asm.append({
+            'name': 'CSC_D_BATCH_NUMBER',
+            'NVDLA_CSC_BATCH_NUMBER': 1
+        })
+        # post extension params (unused)
+        self.ila_asm.append({
+            'name': 'CSC_D_POST_Y_EXTENSION',
+            'NVDLA_CSC_Y_EXTENSION': 0
+        })
+        # entry per slice (same calc as above)
+        self.ila_asm.append({
+            'name': 'CSC_D_ENTRY_PER_SLICE',
+            'NVDLA_CSC_ENTRIES': int(cbuf_entry_per_slice)
+        })
+        # uncompressed weights
+        self.ila_asm.append({
+            'name': 'CSC_D_WEIGHT_FORMAT',
+            'NVDLA_CSC_WEIGHT_FORMAT': 0
+        })
+        # dimensions of kernel
+        self.ila_asm.append({
+            'name': 'CSC_D_WEIGHT_SIZE_EXT_0',
+            'NVDLA_CSC_WEIGHT_WIDTH_EXT': k_w,
+            'NVDLA_CSC_WEIGHT_HEIGHT_EXT': k_h
+        })
+        self.ila_asm.append({
+            'name': 'CSC_D_WEIGHT_SIZE_EXT_1',
+            'NVDLA_CSC_WEIGHT_CHANNEL_EXT': k_c,
+            'NVDLA_CSC_WEIGHT_KERNEL': k_n
+        })
+        # kernel and compression data (none) size
+        self.ila_asm.append({
+            'name': 'CSC_D_WEIGHT_BYTES',
+            'NVDLA_CSC_WEIGHT_BYTES': int(k_n*k_w*k_h*kernel_channel_layers*16*2/2**5)
+        })
+        self.ila_asm.append({
+            'name': 'CSC_D_WMB_BYTES',
+            'NVDLA_CSC_WMB_BYTES': 0
+        })
+        # output dimensions
+        out_n, out_c, out_h, out_w = self.orig_out_shape
+        self.ila_asm.append({
+            'name': 'CSC_D_DATAOUT_SIZE_0',
+            'NVDLA_CSC_DATAOUT_WIDTH': out_w,
+            'NVDLA_CSC_DATAOUT_HEIGHT': out_h
+        })
+        self.ila_asm.append({
+            'name': 'CSC_D_DATAOUT_SIZE_1',
+            'NVDLA_CSC_DATAOUT_CHANNEL': out_c
+        })
+        # atomics ... in future check if should be out_w*(out_h -1)
+        self.ila_asm.append({
+            'name': 'CSC_D_ATOMICS',
+            'NVDLA_CSC_ATOMICS': out_w*out_h - 1
+        })
+        # release 1 slice of cbuf after current layer
+        self.ila_asm.append({
+            'name': 'CSC_D_RELEASE',
+            'NVDLA_CSC_RELEASE': 1
+        })
+        # conv stride and dilation after extension is same as before as no extension
+        self.ila_asm.append({
+            'name': 'CSC_D_CONV_STRIDE_EXT',
+            'NVDLA_CSC_CONV_X_STRIDE_EXT': self.strides[1],
+            'NVDLA_CSC_CONV_Y_STRIDE_EXT': self.strides[0]
+        })
+        self.ila_asm.append({
+            'name': 'CSC_D_DILATION_EXT',
+            'NVDLA_CSC_X_DILATION_EXT': self.dilation[1],
+            'NVDLA_CSC_Y_DILATION_EXT': self.dilation[0]
+        })
+        # padding is still 0 due to it being done in the driver
+        self.ila_asm.append({
+            'name': 'CSC_D_ZERO_PADDING',
+            'NVDLA_CSC_PAD_LEFT': 0,
+            'NVDLA_CSC_PAD_TOP': 0
+        })
+        self.ila_asm.append({
+            'name': 'CSC_D_ZERO_PADDING_VALUE',
+            'NVDLA_CSC_PAD_VALUE': 0
+        })
+        # cbuf banks setup as before
+        self.ila_asm.append({
+            'name': 'CSC_D_BANK',
+            'NVDLA_CSC_DATA_BANK': 6,
+            'NVDLA_CSC_WEIGHT_BANK': 10
+        })
+        # pra trunctate for winograd (unused as not using winograd)
+        self.ila_asm.append({
+            'name': 'CSC_D_PRA_CFG',
+            'NVDLA_CSC_PRA_TRUNCATE': 0
+        })
+
+        # --- CMAC_A config ---
         # Conv mode does joining cores. In simulator CMAC_A_D_MISC_CFG currently unused
         # NVDLA_CMAC_A_PROC_PRECISION: 0 = 8 bit, 1 = 16 bit
         self.ila_asm.append({
             'name': 'CMAC_A_D_MISC_CFG',
             'NVDLA_CMAC_A_CONV_MODE': 0,
             'NVDLA_CMAC_A_PROC_PRECISION': 1
+        })
+        # --- CMAC_B config ---
+        # Same as above but simulator just does both A and B so only
+        # CMAC_A config commands are used for the simulator
+        self.ila_asm.append({
+            'name': 'CMAC_B_D_MISC_CFG',
+            'NVDLA_CMAC_B_CONV_MODE': 0,
+            'NVDLA_CMAC_B_PROC_PRECISION': 1
+        })
+
+        # --- CACC config ---
+        # same as above
+        self.ila_asm.append({
+            'name': 'CACC_D_MISC_CFG',
+            'NVDLA_CACC_CONV_MODE': 0,
+            'NVDLA_CACC_PROC_PRECISION': 1
+        })
+        # output dimensions
+        self.ila_asm.append({
+            'name': 'CACC_D_DATAOUT_SIZE_0',
+            'NVDLA_CACC_DATAOUT_WIDTH': out_w,
+            'NVDLA_CACC_DATAOUT_HEIGHT': out_h
+        })
+        self.ila_asm.append({
+            'name': 'CACC_D_DATAOUT_SIZE_1',
+            'NVDLA_CACC_DATAOUT_CHANNEL': out_c
+        })
+        # out addr
+        # TOOD: this address is silly - fix it across the board
+        self.ila_asm.append({
+            'name': 'CACC_D_DATAOUT_ADDR',
+            'NVDLA_CACC_DATAOUT_ADDR': int(512000/2**5)
+        })
+        # batch number
+        assert out_n == 1, "Output batch number not 1"
+        self.ila_asm.append({
+            'name': 'CACC_D_BATCH_NUMBER',
+            'NVDLA_CACC_BATCH_NUMBER': out_n
+        })
+        # output line stride
+        self.ila_asm.append({
+            'name': 'CACC_D_LINE_STRIDE',
+            'NVDLA_CACC_LINE_STRIDE': int(out_w*16*2/2**5)
+        })
+        # output surface stride
+        self.ila_asm.append({
+            'name': 'CACC_D_SURF_STRIDE',
+            'NVDLA_CACC_SURF_STRIDE': int(out_w*out_h*16*2/2**5)
+        })
+        # not packed
+        self.ila_asm.append({
+            'name': 'CACC_D_DATAOUT_MAP',
+            'NVDLA_CACC_LINE_PACKED': 0,
+            'NVDLA_CACC_LINE_PACKED': 0
+        })
+        # clip down to 32 bit for sdp from 48 bit
+        self.ila_asm.append({
+            'name': 'CACC_D_CLIP_CFG',
+            'NVDLA_CACC_CLIP_TRUNCATE': 16
+        })
+        # saturation
+        self.ila_asm.append({
+            'name': 'CACC_D_OUT_SATURATION',
+            'NVDLA_CACC_SAT_COUNT': 16
         })
 
         # --- Enable CDMA, CSC, CMAC_A, CMAC_B, CACC cores ---
