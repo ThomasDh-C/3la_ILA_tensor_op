@@ -12,7 +12,7 @@ import timeit
 from sdp_converter import SDPConverter
 
 
-class relu_driver:
+class sdp_driver:
     def __init__(self, inp_shape, inp2_shape=[], axis=None,
                  op_name="relu"):
         self.inp1_shape = inp_shape
@@ -101,24 +101,322 @@ class relu_driver:
         """
         produce asm fragment with reg configuration, enable and datapath 
         """
+        # --- Pre-setup for SDP RDMA ---
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_S_POINTER',
+            'NVDLA_SDP_RDMA_PRODUCER': 0,
+            'NVDLA_SDP_RDMA_CONSUMER': 0
+        })
+        # --- Set up SDP RDMA ---
+        # set input data cube dimensions
+        h, w, c = self.input1.shape
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_DATA_CUBE_WIDTH',
+            'NVDLA_SDP_RDMA_WIDTH': w
+        })
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_DATA_CUBE_HEIGHT',
+            'NVDLA_SDP_RDMA_HEIGHT': h
+        })
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_DATA_CUBE_CHANNEL',
+            'NVDLA_SDP_RDMA_CHANNEL': c
+        })
+        # address of input data cube
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_SRC_BASE_ADDR_LOW',
+            'NVDLA_SDP_RDMA_SRC_BASE_ADDR_LOW': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_SRC_BASE_ADDR_HIGH',
+            'NVDLA_SDP_RDMA_SRC_BASE_ADDR_HIGH': 0
+        })
+        # line stride of input data cube
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_SRC_LINE_STRIDE',
+            'NVDLA_SDP_RDMA_SRC_LINE_STRIDE': int(w*16*2/2**5)
+        })
+        # surface stride of input data cube
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_SRC_SURFACE_STRIDE',
+            'NVDLA_SDP_RDMA_SRC_SURFACE_STRIDE': int(w*h*16*2/2**5)
+        })
+        # brdma cfg (for sub-module of SDP that use for all ops currently)
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_BRDMA_CFG',
+            'NVDLA_SDP_RDMA_BRDMA_DISABLE': 0
+        })
+        # alu_mul brdma
+        alu_or_mul = 0
+        if 'mul' in self.op_name or 'prelu' in self.op_name:
+            alu_or_mul = 1
+        if 'channel_batch_norm' == self.op_name:
+            alu_or_mul = 2
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_BRDMA_CFG',
+            'NVDLA_SDP_RDMA_BRDMA_DISABLE': 1,
+            'NVDLA_SDP_RDMA_BRDMA_DATA_USE': alu_or_mul,
+            'NVDLA_SDP_RDMA_BRDMA_DATA_SIZE': 1,
+            'NVDLA_SDP_RDMA_BRDMA_DATA_MODE': 1 if 'elemwise' in self.op_name else 0,
+            'NVDLA_SDP_RDMA_BRDMA_RAM_TYPE': 1
+        })
+        # bias addresses
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_BS_BASE_ADDR_LOW',
+            'NVDLA_SDP_RDMA_BS_BASE_ADDR_LOW': int(256000/2**5)
+        })
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_BS_BASE_ADDR_HIGH',
+            'NVDLA_SDP_RDMA_BS_BASE_ADDR_HIGH': 0
+        })
+        # line stride of bias data
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_BS_LINE_STRIDE',
+            'NVDLA_SDP_RDMA_BS_LINE_STRIDE': int(w*16*2/2**5)
+        })
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_BS_SURFACE_STRIDE',
+            'NVDLA_SDP_RDMA_BS_SURFACE_STRIDE': int(w*h*16*2/2**5)
+        })
+        # only batches of 1 supported for now
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_BS_BATCH_STRIDE',
+            'NVDLA_SDP_RDMA_BS_BATCH_STRIDE': int(w*h*16*2/2**5)
+        })
+        # ... unused below here until otherwise marked (but needed to disable) ...
+        # nrdma (input second core of SDP) cfg (unused)
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_NRDMA_CFG',
+            'NVDLA_SDP_RDMA_NRDMA_DISABLE': 1,
+            'NVDLA_SDP_RDMA_NRDMA_DATA_USE': 0,
+            'NVDLA_SDP_RDMA_NRDMA_DATA_SIZE': 0,
+            'NVDLA_SDP_RDMA_NRDMA_DATA_MODE': 0,
+            'NVDLA_SDP_RDMA_NRDMA_RAM_TYPE': 0
+        })
+        # bias addresses (unused)
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_BN_BASE_ADDR_LOW',
+            'NVDLA_SDP_RDMA_BN_BASE_ADDR_LOW': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_BN_BASE_ADDR_HIGH',
+            'NVDLA_SDP_RDMA_BN_BASE_ADDR_HIGH': 0
+        })
+        # line stride of bias data (unused)
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_BN_LINE_STRIDE',
+            'NVDLA_SDP_RDMA_BN_LINE_STRIDE': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_BN_SURFACE_STRIDE',
+            'NVDLA_SDP_RDMA_BN_SURFACE_STRIDE': 0
+        })
+        # only batches of 1 supported for now (unused)
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_BN_BATCH_STRIDE',
+            'NVDLA_SDP_RDMA_BN_BATCH_STRIDE': 0
+        })
+        # erdma (input third core of SDP) cfg (unused)
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_ERDMA_CFG',
+            'NVDLA_SDP_RDMA_ERDMA_DISABLE': 1,
+            'NVDLA_SDP_RDMA_ERDMA_DATA_USE': 0,
+            'NVDLA_SDP_RDMA_ERDMA_DATA_SIZE': 0,
+            'NVDLA_SDP_RDMA_ERDMA_DATA_MODE': 0,
+            'NVDLA_SDP_RDMA_ERDMA_RAM_TYPE': 0
+        })
+        # bias addresses (unused)
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_EW_BASE_ADDR_LOW',
+            'NVDLA_SDP_RDMA_EW_BASE_ADDR_LOW': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_EW_BASE_ADDR_HIGH',
+            'NVDLA_SDP_RDMA_EW_BASE_ADDR_HIGH': 0
+        })
+        # line stride of bias data (unused)
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_EW_LINE_STRIDE',
+            'NVDLA_SDP_RDMA_EW_LINE_STRIDE': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_EW_SURFACE_STRIDE',
+            'NVDLA_SDP_RDMA_EW_SURFACE_STRIDE': 0
+        })
+        # only batches of 1 supported for now (unused)
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_EW_BATCH_STRIDE',
+            'NVDLA_SDP_RDMA_EW_BATCH_STRIDE': 0
+        })
+        # ... used again below here ...
+        # configure features
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_FEATURE_MODE_CFG',
+            'NVDLA_SDP_RDMA_FLYING_MODE': 0,
+            'NVDLA_SDP_RDMA_WINOGRAD': 0,
+            'NVDLA_SDP_RDMA_IN_PRECISION': 1,
+            'NVDLA_SDP_RDMA_PROC_PRECISION': 1,
+            'NVDLA_SDP_RDMA_OUT_PRECISION': 1,
+            'NVDLA_SDP_RDMA_BATCH_NUMBER': 1
+        })
+        # use external DRAM for input
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_SRC_DMA_CFG',
+            'NVDLA_SDP_RDMA_SRC_RAM_TYPE': 1
+        })
+        # don't use perf counters and no floats so don't worry about nan
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_PERF_ENABLE',
+            'NVDLA_SDP_RDMA_PERF_EN': 0,
+            'NVDLA_SDP_RDMA_PERF_NAN_INF_COUNT_EN': 0
+        })
+
+        # --- ENABLE SDP RDMA ---
+        self.ila_asm.append({
+            'name': 'SDP_RDMA_D_OP_ENABLE',
+            'NVDLA_SDP_RDMA_D_OP_ENABLE': 1
+        })
+
+        # --- Pre-setup for SDP ---
         self.ila_asm.append({
             'name': 'SDP_S_POINTER',
             'NVDLA_SDP_PRODUCER': 0,
             'NVDLA_SDP_CONSUMER': 0
         })
+
+        # --- Set up SDP (SDP and SDP RDMA (TODO: rdma enable) enable occurs in the various produce_ functions)
+        # Luts aren't used but have to set them up as such
+        # self.produce_lut_asm()
+
+        # dimensions of input
         self.ila_asm.append({
             'name': 'SDP_D_DATA_CUBE_WIDTH',
-            'NVDLA_SDP_WIDTH': self.inp1_shape[0]
+            'NVDLA_SDP_WIDTH': w
         })
         self.ila_asm.append({
             'name': 'SDP_D_DATA_CUBE_HEIGHT',
-            'NVDLA_SDP_HEIGHT': self.inp1_shape[1]
+            'NVDLA_SDP_HEIGHT': h
         })
         self.ila_asm.append({
             'name': 'SDP_D_DATA_CUBE_CHANNEL',
-            'NVDLA_SDP_CHANNEL': self.inp1_shape[2]
+            'NVDLA_SDP_CHANNEL': c
         })
-        self.produce_no_lut_asm()
+        # output memory address
+        self.ila_asm.append({
+            'name': 'SDP_D_DST_BASE_ADDR_LOW',
+            'NVDLA_SDP_DST_BASE_ADDR_LOW': int(512000/2**5)
+        })
+        self.ila_asm.append({
+            'name': 'SDP_D_DST_BASE_ADDR_HIGH',
+            'NVDLA_SDP_DST_BASE_ADDR_HIGH': 0
+        })
+        # line stride of output data (output dims same as input 0 dims)
+        self.ila_asm.append({
+            'name': 'SDP_D_DST_LINE_STRIDE',
+            'NVDLA_SDP_DST_LINE_STRIDE': int(w*16*2/2**5)
+        })
+        # surface stride of output data (output dims same as input 0 dims)
+        self.ila_asm.append({
+            'name': 'SDP_D_DST_SURFACE_STRIDE',
+            'NVDLA_SDP_DST_SURFACE_STRIDE': int(w*h*16*2/2**5)
+        })
+
+        # SDP_D_DP_BS_CFG, SDP_D_DP_BN_CFG and SDP_D_DP_EW_CFG all configured in each produce function
+        # Same for SDP_D_DP_BS_ALU_CFG and SDP_D_DP_BS_MUL_CFG
+        # SDP_D_DP_BS_ALU_SRC_VALUE and SDP_D_DP_BS_MUL_SRC_VALUE only used by batch_norm per layer
+        # but this is never used by relay so never called --> can safely set it arbitrarly to 0 as unused
+        self.ila_asm.append({
+            'name': 'SDP_D_DP_BS_ALU_SRC_VALUE',
+            'NVDLA_SDP_BS_ALU_OPERAND': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_D_DP_BS_MUL_SRC_VALUE',
+            'NVDLA_SDP_BS_MUL_OPERAND': 0
+        })
+        # following are never used as only use first module of SDP currently
+        self.ila_asm.append({
+            'name': 'SDP_D_DP_BN_ALU_CFG',
+            'NVDLA_SDP_BN_ALU_SRC': 0,
+            'NVDLA_SDP_BN_ALU_SHIFT_VALUE': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_D_DP_BN_ALU_SRC_VALUE',
+            'NVDLA_SDP_BN_ALU_OPERAND': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_D_DP_BN_MUL_CFG',
+            'NVDLA_SDP_BN_MUL_SRC': 0,
+            'NVDLA_SDP_BN_MUL_SHIFT_VALUE': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_D_DP_BN_MUL_SRC_VALUE',
+            'NVDLA_SDP_BN_MUL_OPERAND': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_D_DP_EW_ALU_CFG',
+            'NVDLA_SDP_EW_ALU_SRC': 0,
+            'NVDLA_SDP_EW_ALU_CVT_BYPASS': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_D_DP_EW_ALU_SRC_VALUE',
+            'NVDLA_SDP_EW_ALU_OPERAND': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_D_DP_EW_ALU_CVT_OFFSET_VALUE',
+            'NVDLA_SDP_EW_ALU_CVT_OFFSET': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_D_DP_EW_ALU_CVT_SCALE_VALUE',
+            'NVDLA_SDP_EW_ALU_CVT_SCALE': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_D_DP_EW_ALU_CVT_TRUNCATE_VALUE',
+            'NVDLA_SDP_EW_ALU_CVT_TRUNCATE': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_D_DP_EW_MUL_CFG',
+            'NVDLA_SDP_EW_MUL_SRC': 0,
+            'NVDLA_SDP_EW_MUL_CVT_BYPASS': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_D_DP_EW_MUL_SRC_VALUE',
+            'NVDLA_SDP_EW_MUL_OPERAND': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_D_DP_EW_MUL_CVT_OFFSET_VALUE',
+            'NVDLA_SDP_EW_MUL_CVT_OFFSET': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_D_DP_EW_MUL_CVT_SCALE_VALUE',
+            'NVDLA_SDP_EW_MUL_CVT_SCALE': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_D_DP_EW_MUL_CVT_TRUNCATE_VALUE',
+            'NVDLA_SDP_EW_MUL_CVT_TRUNCATE': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_D_DP_EW_TRUNCATE_VALUE',
+            'NVDLA_SDP_EW_TRUNCATE': 0
+        })
+        # SDP_D_FEATURE_MODE_CFG is in every produce function
+        # use external DRAM
+        self.ila_asm.append({
+            'name': 'SDP_D_DST_DMA_CFG',
+            'NVDLA_SDP_DST_RAM_TYPE': 1
+        })
+        self.ila_asm.append({
+            'name': 'SDP_D_DST_BATCH_STRIDE',
+            'NVDLA_SDP_DST_BATCH_STRIDE': int(w*h*16*2/2**5)
+        })
+        # turn off perf counting
+        self.ila_asm.append({
+            'name': 'SDP_D_PERF_ENABLE',
+            'NVDLA_SDP_PERF_DMA_EN': 0,
+            'NVDLA_SDP_PERF_LUT_EN': 0,
+            'NVDLA_SDP_PERF_SAT_EN': 0,
+            'NVDLA_SDP_PERF_NAN_INF_COUNT_EN': 0
+        })
+
         if self.op_name == 'layer_relu':
             self.produce_relu_asm()
         if self.op_name == 'channel_bias_add':
@@ -138,13 +436,67 @@ class relu_driver:
         if self.op_name == 'channel_batch_norm':
             self.produce_batch_norm(per='channel')
 
-    def produce_no_lut_asm(self):
-        """Shouldn't be needed but simulator requires that luts be configured even if unused"""
+    def produce_lut_asm(self):
+        """Currently unused but this function would set up any used functions"""
+        # write to table 0 (table X)
+        self.ila_asm.append({
+            'name': 'SDP_S_LUT_ACCESS_CFG',
+            'NVDLA_SDP_LUT_TABLE_ID': 0,
+            'NVDLA_SDP_LUT_ACCESS_TYPE': 1
+        })
+        # write some data to the table (repeat for all data and for both tables)
+        self.ila_asm.append({
+            'name': 'SDP_S_LUT_ACCESS_DATA',
+            'NVDLA_SDP_LUT_DATA': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_S_LUT_CFG',
+            'NVDLA_SDP_LUT_LE_FUNCTION': 0,
+            'NVDLA_SDP_LUT_UFLOW_PRIORITY': 0,
+            'NVDLA_SDP_LUT_OFLOW_PRIORITY': 0,
+            'NVDLA_SDP_LUT_HYBRID_PRIORITY': 0
+        })
         self.ila_asm.append({
             'name': 'SDP_S_LUT_INFO',
             'NVDLA_SDP_LUT_LE_INDEX_OFFSET': 0,
             'NVDLA_SDP_LUT_LE_INDEX_SELECT': 0,
             'NVDLA_SDP_LUT_LO_INDEX_SELECT': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_S_LUT_LE_START',
+            'NVDLA_SDP_LUT_LE_START': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_S_LUT_LE_END',
+            'NVDLA_SDP_LUT_LE_END': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_S_LUT_LO_START',
+            'NVDLA_SDP_LUT_LO_START': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_S_LUT_LO_END',
+            'NVDLA_SDP_LUT_LO_END': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_S_LUT_LE_SLOPE_SCALE',
+            'NVDLA_SDP_LUT_LE_SLOPE_UFLOW_SCALE': 0,
+            'NVDLA_SDP_LUT_LE_SLOPE_OFLOW_SCALE': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_S_LUT_LE_SLOPE_SHIFT',
+            'NVDLA_SDP_LUT_LE_SLOPE_UFLOW_SHIFT': 0,
+            'NVDLA_SDP_LUT_LE_SLOPE_OFLOW_SHIFT': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_S_LUT_LO_SLOPE_SCALE',
+            'NVDLA_SDP_LUT_LO_SLOPE_UFLOW_SCALE': 0,
+            'NVDLA_SDP_LUT_LO_SLOPE_OFLOW_SCALE': 0
+        })
+        self.ila_asm.append({
+            'name': 'SDP_S_LUT_LO_SLOPE_SHIFT',
+            'NVDLA_SDP_LUT_LO_SLOPE_UFLOW_SHIFT': 0,
+            'NVDLA_SDP_LUT_LO_SLOPE_OFLOW_SHIFT': 0
         })
 
     def produce_relu_asm(self):
@@ -191,6 +543,41 @@ class relu_driver:
             'NVDLA_SDP_NAN_TO_ZERO': 0,
             'NVDLA_SDP_BATCH_NUMBER': 0
         })
+        # unused but include for completeness
+        self.ila_asm.append({
+            'name': 'SDP_D_DP_BS_ALU_CFG',
+            'NVDLA_SDP_BS_ALU_SRC': 0,
+            'NVDLA_SDP_BS_ALU_SHIFT_VALUE': 0,
+        })
+        # unused but include for completeness
+        self.ila_asm.append({
+            'name': 'SDP_D_DP_BS_MUL_CFG',
+            'NVDLA_SDP_BS_MUL_SRC': 0,
+            'NVDLA_SDP_BS_MUL_SHIFT_VALUE': 0,
+        })
+        # unused but include for completeness
+        self.ila_asm.append({
+            'name': 'SDP_D_CVT_OFFSET',
+            'NVDLA_SDP_CVT_OFFSET': 0
+        })
+        # unused but include for completeness
+        self.ila_asm.append({
+            'name': 'SDP_D_CVT_SCALE',
+            'NVDLA_SDP_CVT_SCALE': 1
+        })
+        # unused but include for completeness
+        self.ila_asm.append({
+            'name': 'SDP_D_CVT_SHIFT',
+            'NVDLA_SDP_CVT_SHIFT': 0
+        })
+        # NVDLA_SDP_PROC_PRECISION unused in sim
+        # NVDLA_SDP_OUT_PRECISION: 0 = 8 bit, 1 = 16 bit
+        self.ila_asm.append({
+            'name': 'SDP_D_DATA_FORMAT',
+            'NVDLA_SDP_PROC_PRECISION': 1,
+            'NVDLA_SDP_OUT_PRECISION': 1,
+        })
+
         # enable means ready for incoming data
         self.ila_asm.append({
             'name': 'SDP_D_OP_ENABLE',
@@ -719,6 +1106,6 @@ if __name__ == '__main__':
     parser.add_argument("--op_name", default="relu")
     args = parser.parse_args()
 
-    driver = relu_driver(inp_shape=args.inp_shape,
-                         inp2_shape=args.inp2_shape, op_name=args.op_name, axis=args.axis)
+    driver = sdp_driver(inp_shape=args.inp_shape,
+                        inp2_shape=args.inp2_shape, op_name=args.op_name, axis=args.axis)
     driver.run()

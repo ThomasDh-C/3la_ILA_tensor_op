@@ -53,8 +53,9 @@ class SDPConverter:
         self.prog_frag = []
         for asm_line in self.asm_list:
             if asm_line['name'] in self.sdp_param_shifts_for_csb:
-                if 'SDP' not in asm_line['name']:
-                    print('ERROR!!!!', asm_line['name'])
+                # this driver only supports the sdp simulator (none exist for the sdp)
+                # other sub-units have their own drivers
+                if 'SDP_RDMA' in asm_line['name'] or 'SDP' not in asm_line['name']:
                     continue
                 # append to prog frag based on that and find inp_addr_end
                 instr = {"instr No.": len(self.prog_frag)}
@@ -104,17 +105,17 @@ class SDPConverter:
                 if asm_line['name'] == 'SDP_D_DP_EW_MUL_CFG':
                     self.ew_mul_src = asm_line['NVDLA_SDP_EW_MUL_SRC']
                 if asm_line['name'] == 'SDP_D_DP_BS_ALU_SRC_VALUE':
-                    self.bs_reg_alu_operand = asm_line['NVDLA_SDP_DP_BS_ALU_SRC_VALUE']
+                    self.bs_reg_alu_operand = asm_line['NVDLA_SDP_BS_ALU_OPERAND']
                 if asm_line['name'] == 'SDP_D_DP_BS_MUL_SRC_VALUE':
-                    self.bs_reg_mul_operand = asm_line['NVDLA_SDP_DP_BS_MUL_SRC_VALUE']
+                    self.bs_reg_mul_operand = asm_line['NVDLA_SDP_BS_MUL_OPERAND']
                 if asm_line['name'] == 'SDP_D_DP_BN_ALU_SRC_VALUE':
-                    self.bn_reg_alu_operand = asm_line['NVDLA_SDP_DP_BN_ALU_SRC_VALUE']
+                    self.bn_reg_alu_operand = asm_line['NVDLA_SDP_BN_ALU_OPERAND']
                 if asm_line['name'] == 'SDP_D_DP_BN_MUL_SRC_VALUE':
-                    self.bn_reg_mul_operand = asm_line['NVDLA_SDP_DP_BN_MUL_SRC_VALUE']
+                    self.bn_reg_mul_operand = asm_line['NVDLA_SDP_BN_MUL_OPERAND']
                 if asm_line['name'] == 'SDP_D_DP_EW_ALU_SRC_VALUE':
-                    self.ew_reg_alu_operand = asm_line['NVDLA_SDP_DP_EW_ALU_SRC_VALUE']
-                if asm_line['name'] == 'SDP_D_DP_EW_ALU_SRC_VALUE':
-                    self.ew_reg_mul_operand = asm_line['NVDLA_SDP_DP_EW_MUL_SRC_VALUE']
+                    self.ew_reg_alu_operand = asm_line['NVDLA_SDP_EW_ALU_OPERAND']
+                if asm_line['name'] == 'SDP_D_DP_EW_MUL_SRC_VALUE':
+                    self.ew_reg_mul_operand = asm_line['NVDLA_SDP_EW_MUL_OPERAND']
 
                 if asm_line['name'] == 'SDP_D_DATA_CUBE_WIDTH':
                     self.inp1_shape[0] = asm_line['NVDLA_SDP_WIDTH']
@@ -257,7 +258,7 @@ class SDPConverter:
                 self.prog_frag.append(instr)
             else:
                 raise Exception(
-                    "Driver generated an ILA instuction that doesn't exist")
+                    f"Driver generated an ILA instuction {asm_line['name']} that doesn't exist")
 
     def dump_ila_prog_frag(self, out_path):
         """

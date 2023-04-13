@@ -99,12 +99,34 @@ class conv_driver:
         """
         produce asm fragment with reg configuration, enable and datapath 
         """
-        # --- SETUP ---
+        # --- PRE-SETUP CDMA, CSC, CMAC_A, CMAC_B, CACC ---
+        self.ila_asm.append({
+            'name': 'CDMA_S_POINTER',
+            'NVDLA_CDMA_PRODUCER': 0,
+            'NVDLA_CDMA_CONSUMER': 0
+        })
+        self.ila_asm.append({
+            'name': 'CSC_S_POINTER',
+            'NVDLA_CSC_PRODUCER': 0,
+            'NVDLA_CSC_CONSUMER': 0
+        })
         self.ila_asm.append({
             'name': 'CMAC_A_S_POINTER',
             'NVDLA_CMAC_A_PRODUCER': 0,
             'NVDLA_CMAC_A_CONSUMER': 0
         })
+        self.ila_asm.append({
+            'name': 'CMAC_B_S_POINTER',
+            'NVDLA_CMAC_B_PRODUCER': 0,
+            'NVDLA_CMAC_B_CONSUMER': 0
+        })
+        self.ila_asm.append({
+            'name': 'CACC_S_POINTER',
+            'NVDLA_CACC_PRODUCER': 0,
+            'NVDLA_CACC_CONSUMER': 0
+        })
+
+        # --- SETUP CDMA, CSC, CMAC_A, CMAC_B, CACC ---
         # Conv mode does joining cores. In simulator CMAC_A_D_MISC_CFG currently unused
         # NVDLA_CMAC_A_PROC_PRECISION: 0 = 8 bit, 1 = 16 bit
         self.ila_asm.append({
@@ -113,9 +135,26 @@ class conv_driver:
             'NVDLA_CMAC_A_PROC_PRECISION': 1
         })
 
+        # --- Enable CDMA, CSC, CMAC_A, CMAC_B, CACC cores ---
+        self.ila_asm.append({
+            'name': 'CDMA_D_OP_ENABLE',
+            'NVDLA_CDMA_D_OP_ENABLE': 1
+        })
+        self.ila_asm.append({
+            'name': 'CSC_D_OP_ENABLE',
+            'NVDLA_CSC_D_OP_ENABLE': 1
+        })
         self.ila_asm.append({
             'name': 'CMAC_A_D_OP_ENABLE',
             'NVDLA_CMAC_A_D_OP_ENABLE': 1
+        })
+        self.ila_asm.append({
+            'name': 'CMAC_B_D_OP_ENABLE',
+            'NVDLA_CMAC_B_D_OP_ENABLE': 1
+        })
+        self.ila_asm.append({
+            'name': 'CACC_D_OP_ENABLE',
+            'NVDLA_CACC_D_OP_ENABLE': 1
         })
 
         # --- COMPUTATION ---
