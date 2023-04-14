@@ -100,7 +100,7 @@ class cdp_driver:
             'NVDLA_CDP_PRODUCER': 0,
             'NVDLA_CDP_CONSUMER': 0
         })
-        
+
         # --- SETUP CDP RDMA ---
         n, h, w, c = self.inp_matrix.shape
         # 0xe00c: input_width
@@ -173,7 +173,8 @@ class cdp_driver:
             'NVDLA_CDP_LUT_TABLE_ID': lut_table_idx,
             'NVDLA_CDP_LUT_ACCESS_TYPE': 1
         })
-        for lut_table_entry_idx in range(65):
+        # 2^0 to 2^37
+        for lut_table_entry_idx in range(38):
             lut_entry_data = (
                 self.bias + (self.alpha * (2**lut_table_entry_idx) / self.size))**(-self.beta)
             self.ila_asm.append({
@@ -228,13 +229,13 @@ class cdp_driver:
             'name': 'CDP_S_LUT_LE_START_HIGH',
             'NVDLA_CDP_LUT_LE_START_HIGH': 0
         })
-        # LE ends at 2^64 but LE_END_HIGH is only 6 bits long so do 2^5
+        # LE ends at 2^(32+5)
         # 0xf020: config LE end
         self.ila_asm.append({
             'name': 'CDP_S_LUT_LE_END_LOW',
             'NVDLA_CDP_LUT_LE_END_LOW': 0
         })
-        # 0xf024: config LE end
+        # 0xf024: config LE end (6 bits)
         self.ila_asm.append({
             'name': 'CDP_S_LUT_LE_END_HIGH',
             'NVDLA_CDP_LUT_LE_END_HIGH': int(2**5)
