@@ -184,7 +184,7 @@ class sdp_driver:
             'NVDLA_SDP_RDMA_BS_BATCH_STRIDE': int(w*h*16*2/2**5)
         })
         # ... unused below here until otherwise marked (but needed to disable) ...
-        # nrdma (input second core of SDP) cfg (unused)
+        # nrdma (input second sub-unit of SDP) cfg (unused)
         self.ila_asm.append({
             'name': 'SDP_RDMA_D_NRDMA_CFG',
             'NVDLA_SDP_RDMA_NRDMA_DISABLE': 1,
@@ -216,7 +216,7 @@ class sdp_driver:
             'name': 'SDP_RDMA_D_BN_BATCH_STRIDE',
             'NVDLA_SDP_RDMA_BN_BATCH_STRIDE': 0
         })
-        # erdma (input third core of SDP) cfg (unused)
+        # erdma (input third sub-unit of SDP) cfg (unused)
         self.ila_asm.append({
             'name': 'SDP_RDMA_D_ERDMA_CFG',
             'NVDLA_SDP_RDMA_ERDMA_DISABLE': 1,
@@ -533,7 +533,7 @@ class sdp_driver:
             'NVDLA_SDP_EW_LUT_BYPASS': 1
         })
         # if flying false (0), data from mrdma_data
-        # if flying true (1), data from cacc_data (prev core)
+        # if flying true (1), data from cacc_data (prev sub-unit)
         # here use false
         self.ila_asm.append({
             'name': 'SDP_D_FEATURE_MODE_CFG',
@@ -623,7 +623,7 @@ class sdp_driver:
             'NVDLA_SDP_EW_LUT_BYPASS': 1
         })
         # if flying false (0), data from mrdma_data
-        # if flying true (1), data from cacc_data (prev core)
+        # if flying true (1), data from cacc_data (prev sub-unit)
         # here use false
         self.ila_asm.append({
             'name': 'SDP_D_FEATURE_MODE_CFG',
@@ -724,7 +724,7 @@ class sdp_driver:
             'NVDLA_SDP_EW_LUT_BYPASS': 1
         })
         # if flying false (0), data from mrdma_data
-        # if flying true (1), data from cacc_data (prev core)
+        # if flying true (1), data from cacc_data (prev sub-unit)
         # here use false
         self.ila_asm.append({
             'name': 'SDP_D_FEATURE_MODE_CFG',
@@ -820,7 +820,7 @@ class sdp_driver:
             'NVDLA_SDP_EW_LUT_BYPASS': 1
         })
         # if flying false (0), data from mrdma_data
-        # if flying true (1), data from cacc_data (prev core)
+        # if flying true (1), data from cacc_data (prev sub-unit)
         # here use false
         self.ila_asm.append({
             'name': 'SDP_D_FEATURE_MODE_CFG',
@@ -914,7 +914,7 @@ class sdp_driver:
             'NVDLA_SDP_EW_LUT_BYPASS': 1
         })
         # if flying false (0), data from mrdma_data
-        # if flying true (1), data from cacc_data (prev core)
+        # if flying true (1), data from cacc_data (prev sub-unit)
         # here use false
         self.ila_asm.append({
             'name': 'SDP_D_FEATURE_MODE_CFG',

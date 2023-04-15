@@ -62,12 +62,11 @@ class conv_driver:
 
         all_data_str = []
         full_data_str = ''
-        numbers_per_block = 64
+        numbers_per_block = 16
         for n_n in range(n):
             for n_c_large in range(0, math.ceil(c / numbers_per_block)):
                 for n_h in range(h):
                     for n_w in range(w):
-                        # 64 channels per atom for conv
                         # print(n_h, n_w)
                         for n_c_small in range(numbers_per_block):
                             # keep track of ints written
@@ -127,7 +126,7 @@ class conv_driver:
         })
 
         # --- SETUP CDMA, CSC, CMAC_A, CMAC_B, CACC ---
-        # --- CDMA core configuration ---
+        # --- CDMA sub-unit configuration ---
         # adjust whether weights or WMB compression gets more priority in external memory access
         self.ila_asm.append({
             'name': 'CDMA_S_ARBITER',
@@ -380,7 +379,7 @@ class conv_driver:
             'NVDLA_CDMA_DMA_EN': 0
         })
 
-        # --- CSC core configuration ---
+        # --- CSC sub-unit configuration ---
         # misc cfg - mode = direct not winograd
         self.ila_asm.append({
             'name': 'CSC_D_MISC_CFG',
@@ -502,7 +501,7 @@ class conv_driver:
         })
 
         # --- CMAC_A config ---
-        # Conv mode does joining cores. In simulator CMAC_A_D_MISC_CFG currently unused
+        # Conv mode does joining sub-units. In simulator CMAC_A_D_MISC_CFG currently unused
         # NVDLA_CMAC_A_PROC_PRECISION: 0 = 8 bit, 1 = 16 bit
         self.ila_asm.append({
             'name': 'CMAC_A_D_MISC_CFG',
@@ -574,7 +573,7 @@ class conv_driver:
             'NVDLA_CACC_SAT_COUNT': 16
         })
 
-        # --- Enable CDMA, CSC, CMAC_A, CMAC_B, CACC cores ---
+        # --- Enable CDMA, CSC, CMAC_A, CMAC_B, CACC sub-units ---
         self.ila_asm.append({
             'name': 'CDMA_D_OP_ENABLE',
             'NVDLA_CDMA_D_OP_ENABLE': 1
@@ -674,7 +673,7 @@ class conv_driver:
         """
         produce asm for reading data from the RDMA memory of the NVDLA
         """
-        # assumes other cores have run and that the result has been stored back in memory from those - incorrect currently
+        # assumes other sub-units have run and that the result has been stored back in memory
         dbbif_width = 512  # dbbif configurable to width of 32, 64, 128, 256 or 512-bits
         atoms_per_line = int(dbbif_width / 16)
         for i in range(int(np.ceil(np.prod(self.orig_out_shape) / atoms_per_line))):

@@ -51,13 +51,11 @@ class pdp_driver:
 
         all_data_str = []
         full_data_str = ''
-        numbers_per_block = 64
+        numbers_per_block = 16
         for n_n in range(n):
             for n_c_large in range(0, math.ceil(c / numbers_per_block)):
                 for n_h in range(h):
                     for n_w in range(w):
-                        # 64 channels per atom for conv
-                        # print(n_h, n_w)
                         for n_c_small in range(numbers_per_block):
                             # keep track of ints written
                             if addr_offset == 0:
@@ -182,7 +180,7 @@ class pdp_driver:
             'NVDLA_PDP_RDMA_DMA_EN': 0
         })
 
-        # Set up PDP core
+        # Set up PDP sub-unit
         # 0xd00c - input width
         self.ila_asm.append({
             'name': 'PDP_D_DATA_CUBE_WIDTH',
@@ -361,7 +359,7 @@ class pdp_driver:
             'NVDLA_PDP_PERF_EN': 0
         })
 
-        # --- Enable PDP and PDP RDMA cores --- 
+        # --- Enable PDP and PDP RDMA sub-units ---
         self.ila_asm.append({
             'name': 'PDP_RDMA_D_OP_ENABLE',
             'NVDLA_PDP_RDMA_D_OP_ENABLE': 1
@@ -379,7 +377,7 @@ class pdp_driver:
         """
         produce asm for reading data from the RDMA memory of the NVDLA
         """
-        # assumes other cores have run and that the result has been stored back in memory from those - incorrect currently
+        # assumes other sub-units have run and that the result has been stored back in memory
         dbbif_width = 512  # dbbif configurable to width of 32, 64, 128, 256 or 512-bits
         ints_per_line = int(dbbif_width / 16)
         n, h, w, c = self.orig_out_shape
