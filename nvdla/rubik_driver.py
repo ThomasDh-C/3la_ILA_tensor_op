@@ -21,7 +21,7 @@ class rubik_driver:
         # 3d array - 1 at start because only batch number 1 supported
         self.orig_inp_shape = [1] + inp_shape
 
-        self.inp_format = "NCHW" if op_name == "merge" else "NHWC"
+        self.inp_format = "NCHW" if op_name == "layout_transform_merge" else "NHWC"
         self.desired_inp_format = 'NHWC'
         self.inp_matrix = None
         self.ila_asm = []
@@ -92,7 +92,7 @@ class rubik_driver:
         # (0=contract (unused), 1=split (nhwc to nchw), 2=merge (nchw to nhwc)
         self.ila_asm.append({
             'name': 'RUBIK_D_MISC_CFG',
-            'NVDLA_RUBIK_RUBIK_MODE': 1 if self.op_name == 'contract' else 2,
+            'NVDLA_RUBIK_RUBIK_MODE': 1 if self.op_name == 'layout_transform_split' else 2,
             'NVDLA_RUBIK_IN_PRECISION': 1
         })
         # ram type - use external DRAM
